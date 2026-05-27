@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates import utils as ut
-from gwb_templates.FOPT_templates.double_broken_power_law import (
+from gwb_templates.generic_templates.double_broken_power_law import (
     double_broken_power_law,
     d1double_broken_power_law,
 )

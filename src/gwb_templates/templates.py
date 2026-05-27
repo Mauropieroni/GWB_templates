@@ -10,6 +10,18 @@ from gwb_templates.generic_templates.broken_power_law import (
 from gwb_templates.generic_templates.broken_power_law_fixed_smoothness import (
     broken_power_law_fixed_smoothness_model,
 )
+from gwb_templates.generic_templates.broken_power_law_a1 import (
+    broken_power_law_a1_model,
+)
+from gwb_templates.generic_templates.double_broken_power_law import (
+    double_broken_power_law_model,
+)
+from gwb_templates.generic_templates.double_broken_power_law_rf import (
+    double_broken_power_law_rf_model,
+)
+from gwb_templates.generic_templates.two_double_broken_power_laws import (
+    two_double_broken_power_laws_model,
+)
 
 # ── First-order phase transitions ─────────────────────────────────────────────
 from gwb_templates.FOPT_templates.fopt_broken_power_law import (
@@ -17,18 +29,6 @@ from gwb_templates.FOPT_templates.fopt_broken_power_law import (
 )
 from gwb_templates.FOPT_templates.fopt_broken_power_law_old import (
     fopt_broken_power_law_old_model,
-)
-from gwb_templates.FOPT_templates.broken_power_law_a1 import (
-    broken_power_law_a1_model,
-)
-from gwb_templates.FOPT_templates.double_broken_power_law import (
-    double_broken_power_law_model,
-)
-from gwb_templates.FOPT_templates.double_broken_power_law_rf import (
-    double_broken_power_law_rf_model,
-)
-from gwb_templates.generic_templates.two_double_broken_power_laws import (
-    two_double_broken_power_laws_model,
 )
 from gwb_templates.FOPT_templates.pt_sound_waves import pt_sound_waves_model
 from gwb_templates.FOPT_templates.pt_turbulence import pt_turbulence_model
@@ -103,14 +103,14 @@ _REGISTRY: dict[str, Signal_model] = {
     "lognormal_bump": lognormal_bump_model,
     "broken_power_law": broken_power_law_model,
     "broken_power_law_fixed_smoothness": broken_power_law_fixed_smoothness_model,
-    # FOPT
-    "fopt_broken_power_law": fopt_broken_power_law_model,
-    "fopt_old": fopt_broken_power_law_old_model,
-    # phase transitions
     "broken_power_law_a1": broken_power_law_a1_model,
     "double_broken_power_law": double_broken_power_law_model,
     "double_broken_power_law_rf": double_broken_power_law_rf_model,
     "two_double_broken_power_laws": two_double_broken_power_laws_model,
+    # FOPT
+    "fopt_broken_power_law": fopt_broken_power_law_model,
+    "fopt_old": fopt_broken_power_law_old_model,
+    # specific phase transition contributions
     "pt_sound_waves": pt_sound_waves_model,
     "pt_turbulence": pt_turbulence_model,
     "pt_collision": pt_collision_model,

@@ -71,13 +71,17 @@ jac   = model.dtemplate(freq, pars=[1e-10, 2/3])
 
 ### Generic
 
-| Label                                 | Parameters               | Description                           |
-| ------------------------------------- | ------------------------ | ------------------------------------- |
-| `amplitude`                         | `A`                    | Flat amplitude                        |
-| `power_law`                         | `A, n`                 | Power law$A\,(f/f_*)^n$             |
-| `lognormal_bump`                    | `A, f_c, σ`           | Log-normal bump                       |
-| `broken_power_law`                  | `A, f_b, n_1, n_2, Δ` | Broken power law with free smoothness |
-| `broken_power_law_fixed_smoothness` | `A, f_b, n_1, n_2`     | Broken power law, fixed smoothness    |
+| Label                                 | Parameters                                                                 | Description                           |
+| ------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------- |
+| `amplitude`                         | `A`                                                                        | Flat amplitude                        |
+| `power_law`                         | `A, n`                                                                     | Power law A (f/f_*)^n                 |
+| `lognormal_bump`                    | `A, f_c, σ`                                                                | Log-normal bump                       |
+| `broken_power_law`                  | `A, f_b, n_1, n_2, Δ`                                                      | Broken power law with free smoothness |
+| `broken_power_law_fixed_smoothness` | `A, f_b, n_1, n_2`                                                         | Broken power law, fixed smoothness    |
+| `broken_power_law_a1`               | `A, f_b, n_2`                                                              | Broken power law with fixed low-frequency tilt `n_1=3` |
+| `double_broken_power_law`           | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2`               | Double broken power law (8 parameters) |
+| `double_broken_power_law_rf`        | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2`               | Double broken power law (reference-frame variant) |
+| `two_double_broken_power_laws`      | `log_amp_1, log_r_amp_2, log_f_12, log_r_f_12, log_r_f_21, log_r_f_22, n_11, n_12, n_13, a_11, a_12, n_21, n_22, n_23, a_21, a_22` | Sum of two double broken power laws (16 parameters) |
 
 ### First-Order Phase Transitions
 
@@ -85,10 +89,6 @@ jac   = model.dtemplate(freq, pars=[1e-10, 2/3])
 | -------------------------------- | ------------------------------ | ------------------------------------------------------- |
 | `fopt_broken_power_law`        | `A, f_p, n_1, n_2`           | FOPT broken power law                                   |
 | `fopt_old`                     | `A, f_p, n_1, n_2`           | Legacy FOPT broken power law                            |
-| `broken_power_law_a1`          | `A, f_b, n_2`                | Broken power law with fixed low-frequency tilt$n_1=3$ |
-| `double_broken_power_law`      | `A, f_1, f_2, n_1, n_2, n_3` | Double broken power law                                 |
-| `double_broken_power_law_rf`   | `A, f_1, f_2, n_1, n_2, n_3` | Double broken power law (reference frame variant)       |
-| `two_double_broken_power_laws` | 12 params                      | Sum of two double broken power laws                     |
 | `pt_sound_waves`               | `A, f_p`                     | Sound wave contribution (fixed spectral shape)          |
 | `pt_turbulence`                | `A, f_p`                     | Turbulence contribution (fixed spectral shape)          |
 | `pt_collision`                 | `A, f_p`                     | Bubble collision contribution                           |
