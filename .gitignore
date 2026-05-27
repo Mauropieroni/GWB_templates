@@ -1,0 +1,6 @@
+**/*.python-version
+**/__pycache__
+**/*.pyc
+**/__init__.py
+**/gwb_templates.egg-info/
+**/.vscode/

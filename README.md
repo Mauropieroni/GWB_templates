@@ -1,0 +1,167 @@
+<p align="center">
+  <img src="GWB_templates.png" alt="GWB_templates logo" width="400"/>
+</p>
+
+# GWB_templates
+
+**Gravitational Wave Background signal templates for GWB data analysis.**
+
+`gwb_templates` is a Python library providing a unified registry of $h^2\Omega_\mathrm{GW}(f)$ spectral templates, each fully differentiable. Every model exposes a consistent `Signal_model` interface with analytical (or [JAX](https://github.com/google/jax)-computed) first derivatives, making it suitable for gradient-based inference pipelines.
+
+---
+
+## Features
+
+- **JAX-differentiable** — all templates run under `jax.jit`, `jax.grad`, and `jax.vmap`
+- **Analytical Jacobians** — hand-derived `dtemplate` for performance-critical models (cosmic strings, resonant/sharp/flat features, …)
+- **Unified registry** — look up any model by string label via `get_template`
+- **Double precision** — `jax_enable_x64=True` set globally at import time
+- **Precomputed data grids** — interpolation-based templates (cosmic strings, resonant features) load data at import and expose JAX-compatible callables
+
+---
+
+## Installation
+
+```bash
+pip install .
+```
+
+For development (includes linting and testing tools):
+
+```bash
+pip install -e ".[dev]"
+```
+
+**Dependencies:** `jax>=0.4`, `numpy>=1.21`, `scipy>=1.7`, `interpax>=0.1.0`
+
+---
+
+## Quick Start
+
+```python
+import numpy as np
+from gwb_templates.templates import get_template
+
+freq = np.geomspace(1e-4, 1e-1, 100)  # Hz
+
+# Retrieve any model by label
+model = get_template("power_law")
+
+# Evaluate the spectrum
+omega = model.template(freq, pars=[1e-10, 2/3])
+
+# Evaluate the Jacobian  d(Omega)/d(pars),  shape (n_freq, n_pars)
+jac   = model.dtemplate(freq, pars=[1e-10, 2/3])
+```
+
+`Signal_model` attributes:
+
+| Attribute                  | Description                          |
+| -------------------------- | ------------------------------------ |
+| `template(freq, pars)`   | $h^2\Omega_\mathrm{GW}(f)$         |
+| `dtemplate(freq, pars)`  | Jacobian, shape `(n_freq, n_pars)` |
+| `d2template(freq, pars)` | Hessian (where implemented)          |
+| `parameter_names`        | List of parameter name strings       |
+| `parameter_labels`       | List of LaTeX label strings          |
+| `prior`                  | Default prior bounds dict            |
+
+---
+
+## Template Catalogue
+
+### Generic
+
+| Label                                 | Parameters               | Description                           |
+| ------------------------------------- | ------------------------ | ------------------------------------- |
+| `amplitude`                         | `A`                    | Flat amplitude                        |
+| `power_law`                         | `A, n`                 | Power law$A\,(f/f_*)^n$             |
+| `lognormal_bump`                    | `A, f_c, σ`           | Log-normal bump                       |
+| `broken_power_law`                  | `A, f_b, n_1, n_2, Δ` | Broken power law with free smoothness |
+| `broken_power_law_fixed_smoothness` | `A, f_b, n_1, n_2`     | Broken power law, fixed smoothness    |
+
+### First-Order Phase Transitions
+
+| Label                            | Parameters                     | Description                                             |
+| -------------------------------- | ------------------------------ | ------------------------------------------------------- |
+| `fopt_broken_power_law`        | `A, f_p, n_1, n_2`           | FOPT broken power law                                   |
+| `fopt_old`                     | `A, f_p, n_1, n_2`           | Legacy FOPT broken power law                            |
+| `broken_power_law_a1`          | `A, f_b, n_2`                | Broken power law with fixed low-frequency tilt$n_1=3$ |
+| `double_broken_power_law`      | `A, f_1, f_2, n_1, n_2, n_3` | Double broken power law                                 |
+| `double_broken_power_law_rf`   | `A, f_1, f_2, n_1, n_2, n_3` | Double broken power law (reference frame variant)       |
+| `two_double_broken_power_laws` | 12 params                      | Sum of two double broken power laws                     |
+| `pt_sound_waves`               | `A, f_p`                     | Sound wave contribution (fixed spectral shape)          |
+| `pt_turbulence`                | `A, f_p`                     | Turbulence contribution (fixed spectral shape)          |
+| `pt_collision`                 | `A, f_p`                     | Bubble collision contribution                           |
+| `pt_plasma`                    | `A, f_p`                     | Plasma contribution                                     |
+
+### Inflation
+
+| Label                        | Parameters                  | Description                                             |
+| ---------------------------- | --------------------------- | ------------------------------------------------------- |
+| `double_peak`              | `A, f_1, f_2, σ_1, σ_2` | Double log-normal peak                                  |
+| `double_peak_sharp`        | `A, f_1, f_2, n_1, n_2`   | Double sharp peak                                       |
+| `double_peak_sharp_log`    | log-space params            | `double_peak_sharp` in log parametrisation            |
+| `excited_states`           | `A, f_c, σ, δ`          | Excited initial states                                  |
+| `flat_resonant`            | `A, ω`                   | Flat-spectrum resonant modulation                       |
+| `flat_resonant_log`        | log-space params            | `flat_resonant` in log parametrisation                |
+| `lognormal_bump_sharp`     | `A, f_c, σ`              | Log-normal bump with sharp cutoff                       |
+| `lognormal_bump_sharp_log` | log-space params            | `lognormal_bump_sharp` in log parametrisation         |
+| `sharp_feature`            | `A, f_c, ω, φ`          | Sharp-feature oscillatory template (arXiv:1407.4034)    |
+| `sharp_feature_log`        | log-space params            | `sharp_feature` in log parametrisation                |
+| `resonant_feature`         | `A, ω, φ`               | Resonant-feature oscillatory template (arXiv:1407.4034) |
+| `resonant_feature_log`     | log-space params            | `resonant_feature` in log parametrisation             |
+
+### Astrophysical Foregrounds
+
+| Label                         | Parameters                      | Description                                          |
+| ----------------------------- | ------------------------------- | ---------------------------------------------------- |
+| `galactic_binaries`         | `A, α, f_k, δ`              | Galactic binary confusion noise                      |
+| `galactic_binaries_A`       | `A`                           | Galactic binaries — amplitude only (fiducial shape) |
+| `galactic_binaries_old`     | `A, α, f_k, δ`              | Legacy galactic binary template                      |
+| `galactic_binaries_old_A`   | `A`                           | Legacy galactic binaries — amplitude only           |
+| `extragalactic_sobbh_bns`   | `A_bbh, A_bns`                | Stellar-origin BBH + BNS foreground                  |
+| `extragalactic_sobbh_bns_A` | `A`                           | SO-BBH/BNS — amplitude only                         |
+| `extragalactic_wd`          | `A, f_k, δ, α_1, α_2`      | Extragalactic WD binary foreground (Model I)         |
+| `extragalactic_wd_A`        | `A`                           | Extragalactic WD — amplitude only (fiducial shape)  |
+| `extragalactic_wd2`         | `A, f_lo, f_hi, α_lo, α_hi` | Extragalactic WD binary foreground (Model II)        |
+| `extragalactic_wd2_A`       | `A`                           | Extragalactic WD2 — amplitude only (fiducial shape) |
+
+### Cosmic Strings
+
+| Label                         | Parameters                      | Description                                                   |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------------- |
+| `cosmic_string_model_i`     | `log₁₀(Gμ)`                | Nambu-Goto Model I (BOS, analytical spectrum)                 |
+| `cosmic_string_model_i_edf` | `log₁₀(Gμ)`                | Model I with energy-density fraction parametrisation          |
+| `cosmic_string_model_i_eos` | `log₁₀(Gμ)`                | Model I with equation-of-state correction                     |
+| `cosmic_string_model_ii`    | `log₁₀(Gμ)`                | Model II (BOS$P_n$, precomputed 2-D grid, arXiv:1909.00819) |
+| `abelian_higgs_model_ii`    | `log₁₀(Gμ), log₁₀(f_NG)` | Abelian Higgs Model II (amplitude-scaled)                     |
+
+---
+
+## Project Structure
+
+```
+src/gwb_templates/
+├── templates.py                  # Registry & get_template()
+├── utils.py                      # Signal_model dataclass, gradient helpers
+├── constants.py                  # Cosmological & LISA constants
+├── generic_templates/
+├── FOPT_templates/
+├── inflation_templates/
+├── astrophysical_templates/
+└── cosmic_string_templates/
+```
+
+---
+
+## Running the Tests
+
+```bash
+pytest 
+```
+
+---
+
+## License
+
+MIT © Mauro Pieroni
