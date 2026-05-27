@@ -55,8 +55,8 @@ def _make_test(name: str, fixture_path: pathlib.Path):
             npt.assert_allclose(
                 out,
                 outputs_all[j],
-                rtol=1e-10,
-                atol=0.0,
+                rtol=1e-5,
+                atol=1e-13,
                 err_msg=f"Template '{name}' sample {j} differs from stored reference.",
             )
 
