@@ -189,23 +189,6 @@ class Template(ABC):
         """Return a read-only view of the concrete-subclass registry."""
         return MappingProxyType(Template._registry)
 
-
-def get_template_from_registry(name: str, *args: Any, **kwargs: Any) -> Template:
-    """
-    Module-level convenience wrapper around :meth:`Template.from_name`.
-
-    Instantiate a registered :class:`Template` subclass by class name. For
-    the registry to be populated, the modules defining each template must
-    have been imported at least once — the package ``__init__`` does this
-    eagerly, so a plain ``import gwb_templates`` is enough.
-
-    Example::
-
-        from gwb_templates import get_template_from_registry
-        pl = get_template_from_registry("PowerLaw", pivot=1e-2)
-    """
-    return Template.from_name(name, *args, **kwargs)
-
     # ------------------------------------------------------------------
     # Construction
     # ------------------------------------------------------------------
@@ -739,3 +722,20 @@ class NumericalTemplate(Template):
         **kwargs: Any,
     ) -> Array:  # pragma: no cover - re-declared for abstractness
         ...
+
+
+def get_template_from_registry(name: str, *args: Any, **kwargs: Any) -> Template:
+    """
+    Module-level convenience wrapper around :meth:`Template.from_name`.
+
+    Instantiate a registered :class:`Template` subclass by class name. For
+    the registry to be populated, the modules defining each template must
+    have been imported at least once — the package ``__init__`` does this
+    eagerly, so a plain ``import gwb_templates`` is enough.
+
+    Example::
+
+        from gwb_templates import get_template_from_registry
+        pl = get_template_from_registry("PowerLaw", pivot=1e-2)
+    """
+    return Template.from_name(name, *args, **kwargs)
