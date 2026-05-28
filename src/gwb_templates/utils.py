@@ -95,6 +95,204 @@ def hessian_autodiff(
     )
 
 
+def finite_difference_grad_theta(
+    function: IndexedDerivativeFn,
+    frequency: ArrayLike,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference gradient with respect to model parameters.
+    """
+    params = np.asarray(parameters, dtype=float)
+    npars = params.size
+
+    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
+    grad = np.empty(f0.shape + (npars,), dtype=float)
+
+    for i in range(npars):
+        p_plus = params.copy()
+        p_minus = params.copy()
+        p_plus[i] += step
+        p_minus[i] -= step
+
+        f_plus = np.asarray(function(frequency, p_plus, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(function(frequency, p_minus, *args, **kwargs), dtype=float)
+        grad[..., i] = (f_plus - f_minus) / (2.0 * step)
+
+    return jnp.asarray(grad)
+
+
+def finite_difference_hess_theta(
+    function: IndexedDerivativeFn,
+    frequency: ArrayLike,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-5,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference Hessian with respect to model parameters.
+    """
+    params = np.asarray(parameters, dtype=float)
+    npars = params.size
+
+    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
+    hess = np.empty(f0.shape + (npars, npars), dtype=float)
+
+    for i in range(npars):
+        for j in range(i, npars):
+            if i == j:
+                p_plus = params.copy()
+                p_minus = params.copy()
+                p_plus[i] += step
+                p_minus[i] -= step
+
+                f_plus = np.asarray(
+                    function(frequency, p_plus, *args, **kwargs), dtype=float
+                )
+                f_minus = np.asarray(
+                    function(frequency, p_minus, *args, **kwargs), dtype=float
+                )
+                value = (f_plus - 2.0 * f0 + f_minus) / (step**2)
+            else:
+                p_pp = params.copy()
+                p_pm = params.copy()
+                p_mp = params.copy()
+                p_mm = params.copy()
+                p_pp[i] += step
+                p_pp[j] += step
+                p_pm[i] += step
+                p_pm[j] -= step
+                p_mp[i] -= step
+                p_mp[j] += step
+                p_mm[i] -= step
+                p_mm[j] -= step
+
+                f_pp = np.asarray(function(frequency, p_pp, *args, **kwargs), dtype=float)
+                f_pm = np.asarray(function(frequency, p_pm, *args, **kwargs), dtype=float)
+                f_mp = np.asarray(function(frequency, p_mp, *args, **kwargs), dtype=float)
+                f_mm = np.asarray(function(frequency, p_mm, *args, **kwargs), dtype=float)
+                value = (f_pp - f_pm - f_mp + f_mm) / (4.0 * step**2)
+
+            hess[..., i, j] = value
+            hess[..., j, i] = value
+
+    return jnp.asarray(hess)
+
+
+def finite_difference_df(
+    function: IndexedDerivativeFn,
+    frequency: ArrayLike,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference first derivative with respect to frequency.
+    """
+    freq = np.asarray(frequency, dtype=float)
+
+    if freq.ndim == 0:
+        f_plus = np.asarray(function(freq + step, parameters, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(
+            function(freq - step, parameters, *args, **kwargs), dtype=float
+        )
+        return jnp.asarray((f_plus - f_minus) / (2.0 * step))
+
+    flat = freq.ravel()
+    deriv = np.empty(flat.shape, dtype=float)
+    for k, ff in enumerate(flat):
+        f_plus = np.asarray(function(ff + step, parameters, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(function(ff - step, parameters, *args, **kwargs), dtype=float)
+        deriv[k] = (f_plus - f_minus) / (2.0 * step)
+
+    return jnp.asarray(deriv.reshape(freq.shape))
+
+
+def finite_difference_d2f2(
+    function: IndexedDerivativeFn,
+    frequency: ArrayLike,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-5,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference second derivative with respect to frequency.
+    """
+    freq = np.asarray(frequency, dtype=float)
+
+    if freq.ndim == 0:
+        f0 = np.asarray(function(freq, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(function(freq + step, parameters, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(
+            function(freq - step, parameters, *args, **kwargs), dtype=float
+        )
+        return jnp.asarray((f_plus - 2.0 * f0 + f_minus) / (step**2))
+
+    flat = freq.ravel()
+    deriv2 = np.empty(flat.shape, dtype=float)
+    for k, ff in enumerate(flat):
+        f0 = np.asarray(function(ff, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(function(ff + step, parameters, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(function(ff - step, parameters, *args, **kwargs), dtype=float)
+        deriv2[k] = (f_plus - 2.0 * f0 + f_minus) / (step**2)
+
+    return jnp.asarray(deriv2.reshape(freq.shape))
+
+
+def finite_difference_d2f_dtheta(
+    function: IndexedDerivativeFn,
+    frequency: ArrayLike,
+    parameters: ArrayLike,
+    *args: Any,
+    step_f: float = 1e-5,
+    step_theta: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference mixed derivative d/df(d/dtheta).
+    """
+
+    def _mixed_at_scalar_freq(ff: float) -> np.ndarray:
+        g_plus = np.asarray(
+            finite_difference_grad_theta(
+                function,
+                ff + step_f,
+                parameters,
+                *args,
+                step=step_theta,
+                **kwargs,
+            ),
+            dtype=float,
+        )
+        g_minus = np.asarray(
+            finite_difference_grad_theta(
+                function,
+                ff - step_f,
+                parameters,
+                *args,
+                step=step_theta,
+                **kwargs,
+            ),
+            dtype=float,
+        )
+        return (g_plus - g_minus) / (2.0 * step_f)
+
+    freq = np.asarray(frequency, dtype=float)
+
+    if freq.ndim == 0:
+        return jnp.asarray(_mixed_at_scalar_freq(float(freq)))
+
+    flat = freq.ravel()
+    mixed = np.asarray([_mixed_at_scalar_freq(float(ff)) for ff in flat], dtype=float)
+    return jnp.asarray(mixed.reshape(freq.shape + (np.asarray(parameters).size,)))
+
+
 def make_log_log_interpolator(
     freq: AnyArray,
     compute_fn: Callable[..., AnyArray],
