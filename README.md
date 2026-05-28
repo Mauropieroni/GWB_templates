@@ -73,12 +73,12 @@ jac   = model.dtemplate(freq, pars=[1e-10, 2/3])
 
 | Label                                 | Parameters                                                                 | Description                           |
 | ------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------- |
-| `amplitude`                         | `A`                                                                        | Flat amplitude                        |
-| `power_law`                         | `A, n`                                                                     | Power law A (f/f_*)^n                 |
-| `lognormal_bump`                    | `A, f_c, σ`                                                                | Log-normal bump                       |
-| `broken_power_law`                  | `A, f_b, n_1, n_2, Δ`                                                      | Broken power law with free smoothness |
-| `broken_power_law_fixed_smoothness` | `A, f_b, n_1, n_2`                                                         | Broken power law, fixed smoothness    |
-| `broken_power_law_a1`               | `A, f_b, n_2`                                                              | Broken power law with fixed low-frequency tilt `n_1=3` |
+| `amplitude`                         | `log_amplitude`                                                                        | Flat amplitude                        |
+| `power_law`                         | `log_amplitude, n`                                                                     | Power law A (f/f_*)^n                 |
+| `lognormal_bump`                    | `log_amplitude, f_c, σ`                                                                | Log-normal bump                       |
+| `broken_power_law`                  | `log_amplitude, f_b, n_1, n_2, Δ`                                                      | Broken power law with free smoothness |
+| `broken_power_law_fixed_smoothness` | `log_amplitude, f_b, n_1, n_2`                                                         | Broken power law, fixed smoothness    |
+| `broken_power_law_a1`               | `log_amplitude, f_b, n_2`                                                              | Broken power law with fixed low-frequency tilt `n_1=3` |
 | `double_broken_power_law`           | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2`               | Double broken power law (8 parameters) |
 | `double_broken_power_law_rf`        | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2`               | Double broken power law (reference-frame variant) |
 | `two_double_broken_power_laws`      | `log_amp_1, log_r_amp_2, log_f_12, log_r_f_12, log_r_f_21, log_r_f_22, n_11, n_12, n_13, a_11, a_12, n_21, n_22, n_23, a_21, a_22` | Sum of two double broken power laws (16 parameters) |
@@ -87,44 +87,44 @@ jac   = model.dtemplate(freq, pars=[1e-10, 2/3])
 
 | Label                            | Parameters                     | Description                                             |
 | -------------------------------- | ------------------------------ | ------------------------------------------------------- |
-| `fopt_broken_power_law`        | `A, f_p, n_1, n_2`           | FOPT broken power law                                   |
-| `fopt_old`                     | `A, f_p, n_1, n_2`           | Legacy FOPT broken power law                            |
-| `pt_sound_waves`               | `A, f_p`                     | Sound wave contribution (fixed spectral shape)          |
-| `pt_turbulence`                | `A, f_p`                     | Turbulence contribution (fixed spectral shape)          |
-| `pt_collision`                 | `A, f_p`                     | Bubble collision contribution                           |
-| `pt_plasma`                    | `A, f_p`                     | Plasma contribution                                     |
+| `fopt_broken_power_law`        | `log_amplitude, f_p, n_1, n_2`           | FOPT broken power law                                   |
+| `fopt_old`                     | `log_amplitude, f_p, n_1, n_2`           | Legacy FOPT broken power law                            |
+| `pt_sound_waves`               | `log_amplitude, f_p`                     | Sound wave contribution (fixed spectral shape)          |
+| `pt_turbulence`                | `log_amplitude, f_p`                     | Turbulence contribution (fixed spectral shape)          |
+| `pt_collision`                 | `log_amplitude, f_p`                     | Bubble collision contribution                           |
+| `pt_plasma`                    | `log_amplitude, f_p`                     | Plasma contribution                                     |
 
 ### Inflation
 
 | Label                        | Parameters                  | Description                                             |
 | ---------------------------- | --------------------------- | ------------------------------------------------------- |
-| `double_peak`              | `A, f_1, f_2, σ_1, σ_2` | Double log-normal peak                                  |
-| `double_peak_sharp`        | `A, f_1, f_2, n_1, n_2`   | Double sharp peak                                       |
+| `double_peak`              | `log_amplitude, f_1, f_2, σ_1, σ_2` | Double log-normal peak                                  |
+| `double_peak_sharp`        | `log_amplitude, f_1, f_2, n_1, n_2`   | Double sharp peak                                       |
 | `double_peak_sharp_log`    | log-space params            | `double_peak_sharp` in log parametrisation            |
-| `excited_states`           | `A, f_c, σ, δ`          | Excited initial states                                  |
-| `flat_resonant`            | `A, ω`                   | Flat-spectrum resonant modulation                       |
+| `excited_states`           | `log_amplitude, f_c, σ, δ`          | Excited initial states                                  |
+| `flat_resonant`            | `log_amplitude, ω`                   | Flat-spectrum resonant modulation                       |
 | `flat_resonant_log`        | log-space params            | `flat_resonant` in log parametrisation                |
-| `lognormal_bump_sharp`     | `A, f_c, σ`              | Log-normal bump with sharp cutoff                       |
+| `lognormal_bump_sharp`     | `log_amplitude, f_c, σ`              | Log-normal bump with sharp cutoff                       |
 | `lognormal_bump_sharp_log` | log-space params            | `lognormal_bump_sharp` in log parametrisation         |
-| `sharp_feature`            | `A, f_c, ω, φ`          | Sharp-feature oscillatory template (arXiv:1407.4034)    |
+| `sharp_feature`            | `log_amplitude, f_c, ω, φ`          | Sharp-feature oscillatory template (arXiv:1407.4034)    |
 | `sharp_feature_log`        | log-space params            | `sharp_feature` in log parametrisation                |
-| `resonant_feature`         | `A, ω, φ`               | Resonant-feature oscillatory template (arXiv:1407.4034) |
+| `resonant_feature`         | `log_amplitude, ω, φ`               | Resonant-feature oscillatory template (arXiv:1407.4034) |
 | `resonant_feature_log`     | log-space params            | `resonant_feature` in log parametrisation             |
 
 ### Astrophysical Foregrounds
 
 | Label                         | Parameters                      | Description                                          |
 | ----------------------------- | ------------------------------- | ---------------------------------------------------- |
-| `galactic_binaries`         | `A, α, f_k, δ`              | Galactic binary confusion noise                      |
-| `galactic_binaries_A`       | `A`                           | Galactic binaries — amplitude only (fiducial shape) |
-| `galactic_binaries_old`     | `A, α, f_k, δ`              | Legacy galactic binary template                      |
-| `galactic_binaries_old_A`   | `A`                           | Legacy galactic binaries — amplitude only           |
-| `extragalactic_sobbh_bns`   | `A_bbh, A_bns`                | Stellar-origin BBH + BNS foreground                  |
-| `extragalactic_sobbh_bns_A` | `A`                           | SO-BBH/BNS — amplitude only                         |
-| `extragalactic_wd`          | `A, f_k, δ, α_1, α_2`      | Extragalactic WD binary foreground (Model I)         |
-| `extragalactic_wd_A`        | `A`                           | Extragalactic WD — amplitude only (fiducial shape)  |
-| `extragalactic_wd2`         | `A, f_lo, f_hi, α_lo, α_hi` | Extragalactic WD binary foreground (Model II)        |
-| `extragalactic_wd2_A`       | `A`                           | Extragalactic WD2 — amplitude only (fiducial shape) |
+| `galactic_binaries`         | `log_amplitude, α, f_k, δ`              | Galactic binary confusion noise                      |
+| `galactic_binaries_A`       | `log_amplitude`                           | Galactic binaries — amplitude only (fiducial shape) |
+| `galactic_binaries_old`     | `log_amplitude, α, f_k, δ`              | Legacy galactic binary template                      |
+| `galactic_binaries_old_A`   | `log_amplitude`                           | Legacy galactic binaries — amplitude only           |
+| `extragalactic_sobbh_bns`   | `log_amplitude, tilt`                | Stellar-origin BBH + BNS foreground                  |
+| `extragalactic_sobbh_bns_A` | `log_amplitude`                           | SO-BBH/BNS — amplitude only                         |
+| `extragalactic_wd`          | `log_amplitude, f_k, δ, α_1, α_2`      | Extragalactic WD binary foreground (Model I)         |
+| `extragalactic_wd_A`        | `log_amplitude`                           | Extragalactic WD — amplitude only (fiducial shape)  |
+| `extragalactic_wd2`         | `log_amplitude, f_lo, f_hi, α_lo, α_hi` | Extragalactic WD binary foreground (Model II)        |
+| `extragalactic_wd2_A`       | `log_amplitude`                           | Extragalactic WD2 — amplitude only (fiducial shape) |
 
 ### Cosmic Strings
 
