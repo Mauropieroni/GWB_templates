@@ -97,7 +97,7 @@ def hessian_autodiff(
 
 def finite_difference_grad_theta(
     function: IndexedDerivativeFn,
-    frequency: ArrayLike,
+    frequency: Array,
     parameters: ArrayLike,
     *args: Any,
     step: float = 1e-6,
@@ -127,7 +127,7 @@ def finite_difference_grad_theta(
 
 def finite_difference_hess_theta(
     function: IndexedDerivativeFn,
-    frequency: ArrayLike,
+    frequency: Array,
     parameters: ArrayLike,
     *args: Any,
     step: float = 1e-5,
@@ -171,10 +171,18 @@ def finite_difference_hess_theta(
                 p_mm[i] -= step
                 p_mm[j] -= step
 
-                f_pp = np.asarray(function(frequency, p_pp, *args, **kwargs), dtype=float)
-                f_pm = np.asarray(function(frequency, p_pm, *args, **kwargs), dtype=float)
-                f_mp = np.asarray(function(frequency, p_mp, *args, **kwargs), dtype=float)
-                f_mm = np.asarray(function(frequency, p_mm, *args, **kwargs), dtype=float)
+                f_pp = np.asarray(
+                    function(frequency, p_pp, *args, **kwargs), dtype=float
+                )
+                f_pm = np.asarray(
+                    function(frequency, p_pm, *args, **kwargs), dtype=float
+                )
+                f_mp = np.asarray(
+                    function(frequency, p_mp, *args, **kwargs), dtype=float
+                )
+                f_mm = np.asarray(
+                    function(frequency, p_mm, *args, **kwargs), dtype=float
+                )
                 value = (f_pp - f_pm - f_mp + f_mm) / (4.0 * step**2)
 
             hess[..., i, j] = value
@@ -185,7 +193,7 @@ def finite_difference_hess_theta(
 
 def finite_difference_df(
     function: IndexedDerivativeFn,
-    frequency: ArrayLike,
+    frequency: Array,
     parameters: ArrayLike,
     *args: Any,
     step: float = 1e-6,
@@ -197,7 +205,9 @@ def finite_difference_df(
     freq = np.asarray(frequency, dtype=float)
 
     if freq.ndim == 0:
-        f_plus = np.asarray(function(freq + step, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(freq + step, parameters, *args, **kwargs), dtype=float
+        )
         f_minus = np.asarray(
             function(freq - step, parameters, *args, **kwargs), dtype=float
         )
@@ -206,8 +216,12 @@ def finite_difference_df(
     flat = freq.ravel()
     deriv = np.empty(flat.shape, dtype=float)
     for k, ff in enumerate(flat):
-        f_plus = np.asarray(function(ff + step, parameters, *args, **kwargs), dtype=float)
-        f_minus = np.asarray(function(ff - step, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(ff + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(ff - step, parameters, *args, **kwargs), dtype=float
+        )
         deriv[k] = (f_plus - f_minus) / (2.0 * step)
 
     return jnp.asarray(deriv.reshape(freq.shape))
@@ -215,7 +229,7 @@ def finite_difference_df(
 
 def finite_difference_d2f2(
     function: IndexedDerivativeFn,
-    frequency: ArrayLike,
+    frequency: Array,
     parameters: ArrayLike,
     *args: Any,
     step: float = 1e-5,
@@ -228,7 +242,9 @@ def finite_difference_d2f2(
 
     if freq.ndim == 0:
         f0 = np.asarray(function(freq, parameters, *args, **kwargs), dtype=float)
-        f_plus = np.asarray(function(freq + step, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(freq + step, parameters, *args, **kwargs), dtype=float
+        )
         f_minus = np.asarray(
             function(freq - step, parameters, *args, **kwargs), dtype=float
         )
@@ -238,8 +254,12 @@ def finite_difference_d2f2(
     deriv2 = np.empty(flat.shape, dtype=float)
     for k, ff in enumerate(flat):
         f0 = np.asarray(function(ff, parameters, *args, **kwargs), dtype=float)
-        f_plus = np.asarray(function(ff + step, parameters, *args, **kwargs), dtype=float)
-        f_minus = np.asarray(function(ff - step, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(ff + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(ff - step, parameters, *args, **kwargs), dtype=float
+        )
         deriv2[k] = (f_plus - 2.0 * f0 + f_minus) / (step**2)
 
     return jnp.asarray(deriv2.reshape(freq.shape))
@@ -247,7 +267,7 @@ def finite_difference_d2f2(
 
 def finite_difference_d2f_dtheta(
     function: IndexedDerivativeFn,
-    frequency: ArrayLike,
+    frequency: Array,
     parameters: ArrayLike,
     *args: Any,
     step_f: float = 1e-5,

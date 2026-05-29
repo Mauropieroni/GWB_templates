@@ -23,6 +23,7 @@ import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
 
+Array: TypeAlias = jax.Array
 ArrayLike: TypeAlias = jtp.ArrayLike
 
 
@@ -65,9 +66,7 @@ class LognormalBump(AnalyticTemplate):
 
         super().__init__(
             model_name=model_name,
-            model_label=(
-                model_label if model_label is not None else "Lognormal Bump"
-            ),
+            model_label=(model_label if model_label is not None else "Lognormal Bump"),
             parameter_labels=(
                 parameter_labels if parameter_labels is not None else default_labels
             ),
@@ -78,10 +77,10 @@ class LognormalBump(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        log_width: ArrayLike,
+        frequency: Array,
+        log_amplitude: Array,
+        log_pivot: Array,
+        log_width: Array,
     ) -> jax.Array:
         r"""
         Evaluate the log-normal bump spectrum at ``frequency``.

@@ -22,6 +22,7 @@ import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
 
+Array: TypeAlias = jax.Array
 ArrayLike: TypeAlias = jtp.ArrayLike
 
 
@@ -88,10 +89,10 @@ class ExtragalacticSobbhBns(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        tilt: ArrayLike,
-    ) -> jax.Array:
+        frequency: Array,
+        log_amplitude: Array,
+        tilt: Array,
+    ) -> Array:
         x = jnp.asarray(frequency) / self.ref_freq
         return 10.0**log_amplitude * x**tilt
 
@@ -146,8 +147,8 @@ class ExtragalacticSobbhBnsA(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-    ) -> jax.Array:
+        frequency: Array,
+        log_amplitude: Array,
+    ) -> Array:
         x = jnp.asarray(frequency) / self.ref_freq
         return 10.0**log_amplitude * x**self.tilt

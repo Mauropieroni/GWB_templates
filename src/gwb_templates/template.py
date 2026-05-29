@@ -233,9 +233,7 @@ class Template(ABC):
         self.model_type: str = (
             model_type if model_type is not None else self.__class__.__name__
         )
-        self.model_name: str = (
-            model_name if model_name is not None else self.model_type
-        )
+        self.model_name: str = model_name if model_name is not None else self.model_type
         self.model_label: str = (
             model_label if model_label is not None else self.model_name
         )
@@ -364,9 +362,7 @@ class Template(ABC):
 
         return inferred
 
-    def _to_parameter_vector(
-        self, parameters: ArrayLike | Mapping[str, Any]
-    ) -> Array:
+    def _to_parameter_vector(self, parameters: ArrayLike | Mapping[str, Any]) -> Array:
         """
         Coerce ``parameters`` to a 1-D vector in ``self.parameter_names``
         order. Accepts either a mapping (validated) or an array-like
@@ -396,7 +392,7 @@ class Template(ABC):
 
     def _omega_from_parameter_vector(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -418,7 +414,7 @@ class Template(ABC):
 
     def omega_gw_h2_from_parameters(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -431,14 +427,12 @@ class Template(ABC):
         if you want caching across repeated calls (provided
         :attr:`jittable` is ``True``).
         """
-        return self._omega_from_parameter_vector(
-            frequency, parameters, *args, **kwargs
-        )
+        return self._omega_from_parameter_vector(frequency, parameters, *args, **kwargs)
 
     @abstractmethod
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         *args: Any,
         **kwargs: Any,
     ) -> Array:
@@ -473,7 +467,7 @@ class Template(ABC):
 
     def grad_theta_omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -498,7 +492,7 @@ class Template(ABC):
 
     def hess_theta_omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -523,7 +517,7 @@ class Template(ABC):
 
     def d_df_omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -537,7 +531,7 @@ class Template(ABC):
                     frequency, theta, *args, **kwargs
                 )
 
-            def _omega_scalar(ff: ArrayLike) -> Array:
+            def _omega_scalar(ff: Array) -> Array:
                 return self._omega_from_parameter_vector(ff, theta, *args, **kwargs)
 
             return jax.vmap(jax.grad(_omega_scalar))(freq)
@@ -551,7 +545,7 @@ class Template(ABC):
 
     def d2_df2_omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -566,7 +560,7 @@ class Template(ABC):
                     argnums=0,
                 )(frequency, theta, *args, **kwargs)
 
-            def _omega_scalar(ff: ArrayLike) -> Array:
+            def _omega_scalar(ff: Array) -> Array:
                 return self._omega_from_parameter_vector(ff, theta, *args, **kwargs)
 
             return jax.vmap(jax.grad(jax.grad(_omega_scalar)))(freq)
@@ -580,7 +574,7 @@ class Template(ABC):
 
     def d2_df_dtheta_omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         parameters: ArrayLike | Mapping[str, Any],
         *args: Any,
         **kwargs: Any,
@@ -630,7 +624,7 @@ class AnalyticTemplate(Template):
     @abstractmethod
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         *args: Any,
         **kwargs: Any,
     ) -> Array:  # pragma: no cover - re-declared for abstractness
@@ -717,7 +711,7 @@ class NumericalTemplate(Template):
     @abstractmethod
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
+        frequency: Array,
         *args: Any,
         **kwargs: Any,
     ) -> Array:  # pragma: no cover - re-declared for abstractness

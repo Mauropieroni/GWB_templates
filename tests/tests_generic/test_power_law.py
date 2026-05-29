@@ -1,11 +1,11 @@
 # Global
 import unittest
-import jax
 import jax.numpy as jnp
 
 # Local
 from gwb_templates import constants as c
-from gwb_templates.templates import get_template
+from gwb_templates.utils import gradient_autodiff
+from gwb_templates.template import get_template_from_registry
 
 
 def not_a_test(object):
@@ -14,69 +14,37 @@ def not_a_test(object):
 
 
 # Define test parameters for different models
-POWER_LAW_PARAMS = jnp.array([-10.0, 2.0])
-power_law_model = get_template("power_law")
+PARS = jnp.array([-10.0, 2.0])
+model = get_template_from_registry("PowerLaw")
 
 f_points = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, f_points)
-pivot = 10 ** jnp.mean(jnp.log10(fvec))
-
-
-@not_a_test
-def test_dmodel(model, parameters, **kwargs):
-    """
-    Given a signal model and parameters, checks the analytical derivatives
-    against the numerical derivatives computed with the forward diff.
-
-    Parameters:
-    -----------
-    model : Signal_model
-        The signal model object to test
-    parameters : Array
-        Parameters for the signal model
-    kwargs : dict
-        Additional keyword arguments to pass to the signal model
-
-    Returns:
-    --------
-    tuple
-        Tuple containing the analytical and numerical derivatives
-    """
-
-    # Use model's dtemplate method for analytical derivatives
-    dtemplate = model.dtemplate(fvec, parameters, **kwargs)
-
-    # Calculate numerical derivatives using forward differences for comparison
-    dtemplate_forward = jax.jacfwd(model.template, argnums=1)(
-        fvec, parameters, **kwargs
-    )
-
-    return dtemplate, dtemplate_forward
+pivot = model.pivot
 
 
 class TestSignals(unittest.TestCase):
 
-    def test_dpower_law(self):
-        """
-        Test function for the first derivative of a power law signal model.
-        """
-        dtemplate, dtemplate_forward = test_dmodel(
-            power_law_model, POWER_LAW_PARAMS, pivot=pivot
+    def test_gradient_vs_jacfwd(self):
+        grad = model.grad_theta_omega_gw_h2(fvec, PARS)
+
+        grad_fwd = gradient_autodiff(
+            model._omega_from_parameter_vector,
+            fvec,
+            PARS,
         )
-        self.assertAlmostEqual(
-            jnp.sum(dtemplate - dtemplate_forward).item(), 0.0, places=15
-        )
+
+        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=15)
 
     def test_hessian_power_law(self):
         """
         Test function for the second derivative of a power law signal model.
         """
 
-        model = power_law_model.template(fvec, POWER_LAW_PARAMS, pivot=pivot)
+        signal = model.omega_gw_h2(fvec, *PARS)
 
-        hessian = power_law_model.d2template(fvec, POWER_LAW_PARAMS, pivot=pivot)
+        hessian = model.hess_theta_omega_gw_h2(fvec, PARS)
 
-        hessian_analytic = model[None, None, :] * jnp.array(
+        hessian_analytic = signal[None, None, :] * jnp.array(
             [
                 [
                     jnp.log(10.0) ** 2 * fvec**0,
