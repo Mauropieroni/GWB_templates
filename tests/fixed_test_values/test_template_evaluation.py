@@ -21,7 +21,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpy.testing as npt
 
-from gwb_templates.templates import get_template
+from gwb_templates.template import get_template_from_registry
 
 jax.config.update("jax_enable_x64", True)
 
@@ -45,13 +45,13 @@ def _make_test(name: str, fixture_path: pathlib.Path):
 
     def test_method(self: "TestTemplateEvaluation") -> None:
         data = np.load(str(fixture_path))
-        fvec = np.array(data["fvec"]) if use_numpy else jnp.array(data["fvec"])
+        fvec = jnp.array(data["fvec"]) if use_numpy else jnp.array(data["fvec"])
         pars_all = data["pars"]  # (N_SAMPLES, N_PARAMS)
         outputs_all = data["outputs"]  # (N_SAMPLES, N_FREQ)
-        model = get_template(name)
+        model = get_template_from_registry(name)
         for j in range(len(pars_all)):
             p = np.array(pars_all[j]) if use_numpy else jnp.array(pars_all[j])
-            out = np.asarray(model.template(fvec, p))
+            out = np.asarray(model.omega_gw_h2(fvec, *p))
             npt.assert_allclose(
                 out,
                 outputs_all[j],

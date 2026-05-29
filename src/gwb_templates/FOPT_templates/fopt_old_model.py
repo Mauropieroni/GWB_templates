@@ -22,7 +22,7 @@ from gwb_templates.template import AnalyticTemplate
 ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-class BrokenPowerLawOld(AnalyticTemplate):
+class FoptBrokenPowerLawOld(AnalyticTemplate):
     r"""
     Legacy two-parameter broken power law from arXiv:1512.06239.
 
@@ -75,8 +75,4 @@ class BrokenPowerLawOld(AnalyticTemplate):
     ) -> jax.Array:
         r"""Evaluate the legacy broken power-law spectrum."""
         x = frequency / 10.0**log_pivot
-        return (
-            10.0**log_amplitude
-            * x**3.0
-            * (7.0 / (4.0 + 3.0 * x**2.0)) ** 3.5
-        )
+        return 10.0**log_amplitude * x**3.0 * (7.0 / (4.0 + 3.0 * x**2.0)) ** 3.5
