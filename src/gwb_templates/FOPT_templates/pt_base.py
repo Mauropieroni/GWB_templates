@@ -243,3 +243,74 @@ def broken_power_law_a1(
         * x**n_1
         * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
     )
+
+
+def jac_double_broken_power_law_amp_freqs(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_1: jax.Array,
+    log_f_2: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    n_3: float | jax.Array,
+    a_1: float | jax.Array,
+    a_2: float | jax.Array,
+) -> jax.Array:
+    """
+    Analytic partials of :func:`double_broken_power_law` w.r.t. the three
+    "outer" arguments ``(log_amplitude, log_f_1, log_f_2)``.
+
+    Returns:
+        jax.Array of shape ``freq.shape + (3,)``.
+    """
+    x_1 = freq / 10.0**log_f_1
+    x_2 = freq / 10.0**log_f_2
+    r_12 = 10.0 ** (log_f_1 - log_f_2)
+    ln10 = jnp.log(10.0)
+    model = double_broken_power_law(
+        freq, log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2
+    )
+
+    x1a1 = x_1**a_1
+    x2a1 = x_2**a_1
+    x2a2 = x_2**a_2
+    r12a1 = r_12**a_1
+
+    d_logA = model * ln10
+    d_logf1 = (
+        model * ln10 * (n_1 - n_2) * (x2a1 - 1.0) / ((1.0 + r12a1) * (1.0 + x1a1))
+    )
+    num_f2 = (
+        -n_1 * r12a1
+        - (n_3 + (n_1 + n_3) * r12a1) * x2a2
+        + n_2 * (r12a1 * x2a2 - 1.0)
+    )
+    d_logf2 = model * ln10 * num_f2 / ((1.0 + r12a1) * (1.0 + x2a2))
+
+    return jnp.stack([d_logA, d_logf1, d_logf2], axis=-1)
+
+
+def jac_broken_power_law_a1_amp_freq(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_b: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    a_1: float | jax.Array,
+) -> jax.Array:
+    """
+    Analytic partials of :func:`broken_power_law_a1` w.r.t. the two "outer"
+    arguments ``(log_amplitude, log_f_b)``.
+
+    Returns:
+        jax.Array of shape ``freq.shape + (2,)``.
+    """
+    x = freq / 10.0**log_f_b
+    xa = x**a_1
+    ln10 = jnp.log(10.0)
+    model = broken_power_law_a1(freq, log_amplitude, log_f_b, n_1, n_2, a_1)
+
+    d_logA = model * ln10
+    d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
+
+    return jnp.stack([d_logA, d_logfb], axis=-1)

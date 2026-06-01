@@ -105,3 +105,55 @@ class PtPlasma(AnalyticTemplate):
             frequency, log_Omega_s, log_R_H_star, log_T_star
         )
         return sw + mhd
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the combined SW + MHD-turbulence FOPT spectrum
+        w.r.t. ``(log_K, log_R_H_star, xi_w, log_T_star, epsilon)``.
+
+        Composes the analytic Jacobians of the held :class:`PtSoundWaves`
+        and :class:`PtTurbulence` sub-templates via the chain rule.
+        """
+        log_K, log_R_H_star, xi_w, log_T_star, epsilon = (
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+            theta[4],
+        )
+
+        # Sound-wave Jacobian (..., 4) for [log_K, log_R, xi_w, log_T].
+        J_sw = self._sound_waves._grad_theta_omega_gw_h2_analytical(
+            frequency,
+            jnp.stack([log_K, log_R_H_star, xi_w, log_T_star]),
+        )
+        # Pad with zero column for epsilon (last axis).
+        J_sw_full = jnp.concatenate(
+            [J_sw, jnp.zeros(J_sw.shape[:-1] + (1,), dtype=J_sw.dtype)],
+            axis=-1,
+        )  # (..., 5)
+
+        # Turbulence Jacobian (..., 3) for [log_Omega_s, log_R, log_T].
+        log_Omega_s = log_K + jnp.log10(epsilon)
+        J_mhd = self._turbulence._grad_theta_omega_gw_h2_analytical(
+            frequency,
+            jnp.stack([log_Omega_s, log_R_H_star, log_T_star]),
+        )
+
+        # d([log_Omega_s, log_R_H_star, log_T_star])
+        #     / d([log_K, log_R_H_star, xi_w, log_T_star, epsilon])
+        ln10 = jnp.log(10.0)
+        d_inner_d_outer = jnp.array(
+            [
+                [1.0, 0.0, 0.0, 0.0, 1.0 / (ln10 * epsilon)],  # log_Omega_s
+                [0.0, 1.0, 0.0, 0.0, 0.0],  # log_R_H_star
+                [0.0, 0.0, 0.0, 1.0, 0.0],  # log_T_star
+            ]
+        )  # (3, 5)
+        J_mhd_full = J_mhd @ d_inner_d_outer  # (..., 5)
+
+        return J_sw_full + J_mhd_full

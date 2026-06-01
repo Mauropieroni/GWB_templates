@@ -103,6 +103,36 @@ class GalacticBinariesOld(AnalyticTemplate):
             * (1.0 + jnp.tanh(gamma * (fk - fvec)))
         )
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian; columns [log_amplitude, alpha, beta, kappa, gamma, fk]."""
+        log_amplitude, alpha, beta, kappa, gamma, fk = (
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+            theta[4],
+            theta[5],
+        )
+        fvec = jnp.asarray(frequency)
+        t = jnp.tanh(gamma * (fk - fvec))
+        model = self.omega_gw_h2(
+            fvec, log_amplitude, alpha, beta, kappa, gamma, fk
+        )
+        ln10 = jnp.log(10.0)
+        d_logA = model * ln10
+        d_alpha = model * (-(fvec**alpha) * jnp.log(fvec))
+        d_beta = model * (-fvec * jnp.sin(kappa * fvec))
+        d_kappa = model * (-beta * fvec**2 * jnp.cos(kappa * fvec))
+        d_gamma = model * (1.0 - t) * (fk - fvec)
+        d_fk = model * (1.0 - t) * gamma
+        return jnp.stack(
+            [d_logA, d_alpha, d_beta, d_kappa, d_gamma, d_fk], axis=-1
+        )
+
 
 class GalacticBinariesOldA(AnalyticTemplate):
     r"""
@@ -176,3 +206,12 @@ class GalacticBinariesOldA(AnalyticTemplate):
             )
             * (1.0 + jnp.tanh(self.gamma * (self.fk - fvec)))
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian; single column d/d(log_amplitude)."""
+        model = self.omega_gw_h2(jnp.asarray(frequency), theta[0])
+        return (model * jnp.log(10.0))[..., None]

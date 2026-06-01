@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -99,3 +100,28 @@ class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
             * x**tilt_1
             * (0.5 * (1.0 + x)) ** (tilt_2 - tilt_1)
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian. Special case of the 5-param BPL with
+        :math:`\delta = 1` (so :math:`t = x`); the
+        :math:`\partial/\partial\log_{10}\delta` column is dropped.
+        """
+        log_amplitude, log_pivot, tilt_1, tilt_2 = theta
+        x = frequency / 10.0**log_pivot
+        t = x  # delta = 1
+        model = self.omega_gw_h2(
+            frequency, log_amplitude, log_pivot, tilt_1, tilt_2
+        )
+        ln10 = jnp.log(10.0)
+
+        d_logA = model * ln10
+        d_logpiv = model * ln10 * (-tilt_1 - tilt_2 * t) / (1.0 + t)
+        d_t1 = model * (jnp.log(x) + (jnp.log(2.0) - jnp.log(1.0 + t)))
+        d_t2 = model * (jnp.log(1.0 + t) - jnp.log(2.0))
+
+        return jnp.stack([d_logA, d_logpiv, d_t1, d_t2], axis=-1)

@@ -25,6 +25,7 @@ import jax.typing as jtp
 from gwb_templates.FOPT_templates.pt_base import (
     a_hubble,
     broken_power_law_a1,
+    jac_broken_power_law_a1_amp_freq,
     redshift_omega,
 )
 from gwb_templates.template import AnalyticTemplate
@@ -144,3 +145,47 @@ class PtCollision(AnalyticTemplate):
             self.SPECTRAL_INDEX_UV,
             self.TRANSITION_SMOOTHNESS,
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the bubble-collision FOPT spectrum w.r.t.
+        ``(log_K_tilde, log_beta_over_H, log_T_star)``.
+
+        Uses the chain rule through :func:`broken_power_law_a1`.  The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives
+        vanish almost everywhere (consistent with autodiff through
+        :func:`jnp.select`).
+        """
+        log_K_tilde, log_beta_over_H, log_T_star = theta[0], theta[1], theta[2]
+
+        K_tilde = 10.0**log_K_tilde
+        beta_over_H = 10.0**log_beta_over_H
+        T_star = 10.0**log_T_star
+
+        h2FGW0 = redshift_omega(T_star)
+        h2Omega_b = h2FGW0 * self.A_B * K_tilde**2 / beta_over_H**2
+        aH_star = a_hubble(T_star)
+        f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.OMEGA_B_OVER_BETA
+
+        # Partials of broken_power_law_a1 w.r.t. (log_amplitude, log_f_b):
+        # shape (..., 2)
+        J_inner = jac_broken_power_law_a1_amp_freq(
+            frequency,
+            jnp.log10(h2Omega_b),
+            jnp.log10(f_b),
+            self.SPECTRAL_INDEX_IR,
+            self.SPECTRAL_INDEX_UV,
+            self.TRANSITION_SMOOTHNESS,
+        )
+
+        # d([log_h2Omega_b, log_f_b])
+        #     / d([log_K_tilde, log_beta_over_H, log_T_star])
+        # h2Omega_b ∝ K_tilde^2 / beta_over_H^2  →  [2, -2, 0]
+        # f_b ∝ a_hubble(T) * beta_over_H,  a_hubble ∝ T  →  [0, 1, 1]
+        dq_dp = jnp.array([[2.0, -2.0, 0.0], [0.0, 1.0, 1.0]])
+
+        return J_inner @ dq_dp

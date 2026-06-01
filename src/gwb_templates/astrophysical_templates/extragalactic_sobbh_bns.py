@@ -96,6 +96,18 @@ class ExtragalacticSobbhBns(AnalyticTemplate):
         x = jnp.asarray(frequency) / self.ref_freq
         return 10.0**log_amplitude * x**tilt
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+    ) -> Array:
+        """Analytic Jacobian: columns [log_amplitude, tilt]."""
+        fvec = jnp.asarray(frequency)
+        model = self.omega_gw_h2(fvec, theta[0], theta[1])
+        d_logA = model * jnp.log(10.0)
+        d_tilt = model * jnp.log(fvec / self.ref_freq)
+        return jnp.stack([d_logA, d_tilt], axis=-1)
+
 
 class ExtragalacticSobbhBnsA(AnalyticTemplate):
     r"""
@@ -152,3 +164,13 @@ class ExtragalacticSobbhBnsA(AnalyticTemplate):
     ) -> Array:
         x = jnp.asarray(frequency) / self.ref_freq
         return 10.0**log_amplitude * x**self.tilt
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+    ) -> Array:
+        """Analytic Jacobian: single column d/d(log_amplitude)."""
+        model = self.omega_gw_h2(jnp.asarray(frequency), theta[0])
+        d_logA = model * jnp.log(10.0)
+        return d_logA[..., None]

@@ -22,6 +22,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -114,3 +115,35 @@ class BrokenPowerLawA1(AnalyticTemplate):
             * x**n_1
             * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the ``a_1``-parametrised broken power law.
+
+        Closed-form derivatives w.r.t. ``(log_amplitude, log_f_b, n_1,
+        n_2, a_1)``; see module docstring for the spectral shape.
+        """
+        log_amplitude, log_f_b, n_1, n_2, a_1 = theta
+        x = frequency / 10.0**log_f_b
+        xa = x**a_1
+        ln10 = jnp.log(10.0)
+        log_half_1_xa = jnp.log(0.5 * (1.0 + xa))
+        model = self.omega_gw_h2(frequency, log_amplitude, log_f_b, n_1, n_2, a_1)
+
+        d_logA = model * ln10
+        d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
+        d_n1 = model * (jnp.log(x) - log_half_1_xa / a_1)
+        d_n2 = model * log_half_1_xa / a_1
+        d_a1 = (
+            model
+            * (n_2 - n_1)
+            / a_1**2
+            / (1.0 + xa)
+            * (a_1 * xa * jnp.log(x) - (1.0 + xa) * log_half_1_xa)
+        )
+
+        return jnp.stack([d_logA, d_logfb, d_n1, d_n2, d_a1], axis=-1)

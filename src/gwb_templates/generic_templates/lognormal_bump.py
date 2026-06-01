@@ -90,3 +90,30 @@ class LognormalBump(AnalyticTemplate):
         return 10.0**log_amplitude * jnp.exp(
             -0.5 * (jnp.log10(frequency / pivot) / width) ** 2
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the log-normal bump.
+
+        With :math:`u = \log_{10}(f/f_*)` and
+        :math:`\sigma = 10^{\log_{10}\sigma}`:
+
+        - :math:`\partial/\partial(\log_{10}A) = \text{model}\cdot\ln 10`
+        - :math:`\partial/\partial(\log_{10}f_*) = \text{model}\cdot u/\sigma^2`
+        - :math:`\partial/\partial(\log_{10}\sigma) = \text{model}\cdot u^2 \ln 10/\sigma^2`
+        """
+        log_amplitude, log_pivot, log_width = theta
+        pivot = 10.0**log_pivot
+        width = 10.0**log_width
+        model = self.omega_gw_h2(frequency, log_amplitude, log_pivot, log_width)
+        u = jnp.log10(frequency / pivot)
+
+        d_log_A = model * jnp.log(10.0)
+        d_log_piv = model * u / width**2
+        d_log_wid = model * u**2 * jnp.log(10.0) / width**2
+
+        return jnp.stack([d_log_A, d_log_piv, d_log_wid], axis=-1)

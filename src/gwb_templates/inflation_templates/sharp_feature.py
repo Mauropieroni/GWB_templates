@@ -87,6 +87,20 @@ class SharpFeature(AnalyticTemplate):
     ) -> jax.Array:
         return 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian of the sharp-feature modulation."""
+        A_sharp, omega_sharp_Hz, phase_sharp = theta[0], theta[1], theta[2]
+        freq = jnp.asarray(frequency)
+        arg = omega_sharp_Hz * freq + phase_sharp
+        d_A = jnp.cos(arg)
+        d_omega = -A_sharp * jnp.sin(arg) * freq
+        d_theta = -A_sharp * jnp.sin(arg)
+        return jnp.stack([d_A, d_omega, d_theta], axis=-1)
+
 
 class SharpFeatureLog(AnalyticTemplate):
     r"""
@@ -149,3 +163,9 @@ class SharpFeatureLog(AnalyticTemplate):
         A_sharp = 10.0**log_A_sharp
         omega_sharp_Hz = 10.0**log_omega_sharp_Hz
         return 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
+
+    # NOTE: No analytic gradient override — the test for this class compares
+    # the gradient to autodiff at places=15, but the mathematically-correct
+    # analytic form has different fp64 rounding behavior (different order of
+    # the `omega * freq * ln10` product) and cannot match autodiff bit-exactly.
+    # We leave the autodiff backend in place rather than weaken the test.

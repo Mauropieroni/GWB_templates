@@ -94,6 +94,36 @@ def _bilinear_eval(
     )
 
 
+def _bilinear_dS_dix(
+    ix: jax.Array,
+    iy: jax.Array,
+    log10_omega: jax.Array,
+    n_gmu: int,
+    n_freq: int,
+) -> jax.Array:
+    """Analytical dS/d(ix) for the bilinear interpolation."""
+    kx = jnp.clip(
+        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
+        0,
+        n_gmu - 2,
+    )
+    ky = jnp.clip(
+        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
+        0,
+        n_freq - 2,
+    )
+    ty = jnp.clip(iy - ky, 0.0, 1.0)
+
+    row0 = log10_omega[kx]
+    row1 = log10_omega[kx + 1]
+    g00 = row0[ky]
+    g01 = row0[ky + 1]
+    g10 = row1[ky]
+    g11 = row1[ky + 1]
+
+    return (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
+
+
 # ── Template classes ──────────────────────────────────────────────────────────
 
 
@@ -178,6 +208,30 @@ class CosmicStringModelII(NumericalTemplate):
             ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
         )
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
+        log_Gmu = theta[0]
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+
+        S = _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        h2_omega = 10.0**S
+
+        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+
+        grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
+        return grad[..., None]
+
 
 class AbelianHiggsModelII(NumericalTemplate):
     r"""
@@ -259,3 +313,34 @@ class AbelianHiggsModelII(NumericalTemplate):
             ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
         )
         return 10.0**logf * spectrum
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
+        log_Gmu = theta[0]
+        logf = theta[1]
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+
+        S = _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        h2_omega_ii = 10.0**S
+        h2_omega_ah = 10.0**logf * h2_omega_ii
+
+        # d/d(log_Gmu)
+        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        d_d_log_Gmu = (
+            10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
+        )
+        # d/d(logf)
+        d_d_logf = jnp.log(10.0) * h2_omega_ah
+
+        return jnp.stack([d_d_log_Gmu, d_d_logf], axis=-1)

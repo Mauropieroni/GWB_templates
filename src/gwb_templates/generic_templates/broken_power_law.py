@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -103,3 +104,36 @@ class BrokenPowerLaw(AnalyticTemplate):
             * x**tilt_1
             / (0.5 * (1.0 + x ** (1.0 / delta))) ** ((tilt_1 - tilt_2) * delta)
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the smooth broken power law.
+
+        Let :math:`x = f/f_*`, :math:`\delta = 10^{\log_{10}\delta}`,
+        :math:`t = x^{1/\delta}`. See module docstring for full expressions.
+        """
+        log_amplitude, log_pivot, tilt_1, tilt_2, log_transition = theta
+        x = frequency / 10.0**log_pivot
+        delta = 10.0**log_transition
+        t = x ** (1.0 / delta)
+        model = self.omega_gw_h2(
+            frequency, log_amplitude, log_pivot, tilt_1, tilt_2, log_transition
+        )
+        ln10 = jnp.log(10.0)
+
+        d_logA = model * ln10
+        d_logpiv = model * ln10 * (-tilt_1 - tilt_2 * t) / (1.0 + t)
+        d_t1 = model * (jnp.log(x) + delta * (jnp.log(2.0) - jnp.log(1.0 + t)))
+        d_t2 = model * delta * (jnp.log(1.0 + t) - jnp.log(2.0))
+        d_logtrans = (
+            model
+            * ln10
+            * (tilt_1 - tilt_2)
+            * (t * jnp.log(x) / (1.0 + t) - delta * jnp.log(0.5 * (1.0 + t)))
+        )
+
+        return jnp.stack([d_logA, d_logpiv, d_t1, d_t2, d_logtrans], axis=-1)

@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -90,3 +91,31 @@ class FoptBrokenPowerLawOld(AnalyticTemplate):
             * x**3.0
             * (7.0 / (4.0 + 3.0 * x**2.0)) ** 3.5
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the 2-parameter FOPT broken power-law spectrum
+        with respect to ``(log_amplitude, log_f_star)``.
+
+        Returns an array of shape ``frequency.shape + (2,)``.
+        """
+        log_amplitude, log_f_star = theta[0], theta[1]
+        x = frequency / 10.0**log_f_star
+        model = (
+            10.0**log_amplitude
+            * x**3.0
+            * (7.0 / (4.0 + 3.0 * x**2.0)) ** 3.5
+        )
+        ln10 = jnp.log(10.0)
+
+        d_logA = model * ln10
+        # d/d(log_f_star): x ∝ 10^(-log_f_star), so d ln(x)/d log_f_star = -ln10.
+        # d ln(model)/d log_f_star = 3 * (-ln10)
+        #     + 3.5 * (-1) * (6 x^2 / (4 + 3 x^2)) * (-ln10)
+        d_logf = model * ln10 * (-3.0 + 21.0 * x**2.0 / (4.0 + 3.0 * x**2.0))
+
+        return jnp.stack([d_logA, d_logf], axis=-1)

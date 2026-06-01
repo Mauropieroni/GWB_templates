@@ -68,6 +68,61 @@ def _build_resonant_interpolators() -> dict[str, Interpolator1D]:
         }
 
 
+def _resonant_feature_grad_lin(
+    frequency: ArrayLike,
+    A_resonant: ArrayLike,
+    omega_resonant: ArrayLike,
+    phase_resonant: ArrayLike,
+    interps: dict[str, Interpolator1D],
+) -> jax.Array:
+    """Analytic Jacobian of the linear resonant-feature w.r.t. (A, omega, phase)."""
+    C0 = interps["C0"](omega_resonant)
+    C1 = interps["C1"](omega_resonant)
+    C2 = interps["C2"](omega_resonant)
+    theta1 = interps["theta1"](omega_resonant)
+    theta2 = interps["theta2"](omega_resonant)
+    C0p = interps["C0p"](omega_resonant)
+    C1p = interps["C1p"](omega_resonant)
+    C2p = interps["C2p"](omega_resonant)
+    theta1p = interps["theta1p"](omega_resonant)
+    theta2p = interps["theta2p"](omega_resonant)
+
+    x = jnp.log(jnp.asarray(frequency))
+    arg1 = omega_resonant * x + theta1 + phase_resonant
+    arg2 = 2.0 * omega_resonant * x + theta2 + 2.0 * phase_resonant
+    denom = 1.0 + A_resonant**2 * C0
+    denom2 = denom**2
+
+    amp11 = (1.0 - A_resonant**2 * C0) * C1 / denom2
+    amp12 = 2.0 * A_resonant * C2 / denom2
+    d_A = amp11 * jnp.cos(arg1) + amp12 * jnp.cos(arg2)
+
+    amp21 = (
+        A_resonant
+        * (C1p + A_resonant**2 * C0 * C1p - A_resonant**2 * C0p * C1)
+        / denom2
+    )
+    amp22 = (
+        A_resonant**2
+        * (C2p + A_resonant**2 * C0 * C2p - A_resonant**2 * C0p * C2)
+        / denom2
+    )
+    amp23 = -A_resonant * C1 / denom * (x + theta1p)
+    amp24 = -(A_resonant**2) * C2 / denom * (2.0 * x + theta2p)
+    d_omega = (
+        amp21 * jnp.cos(arg1)
+        + amp22 * jnp.cos(arg2)
+        + amp23 * jnp.sin(arg1)
+        + amp24 * jnp.sin(arg2)
+    )
+
+    amp41 = A_resonant * C1 / denom
+    amp42 = 2.0 * A_resonant**2 * C2 / denom
+    d_phi = -(amp41 * jnp.sin(arg1) + amp42 * jnp.sin(arg2))
+
+    return jnp.stack([d_A, d_omega, d_phi], axis=-1)
+
+
 def _resonant_feature_impl(
     frequency: ArrayLike,
     A_resonant: ArrayLike,
@@ -162,6 +217,14 @@ class ResonantFeature(NumericalTemplate):
             frequency, A_resonant, omega_resonant, phase_resonant, self._interps
         )
 
+    # NOTE: An analytic gradient using the precomputed C0p/C1p/... slope
+    # tables is provided as `_resonant_feature_grad_lin` for callers who want
+    # to use it directly. We do NOT install it as the
+    # `_grad_theta_omega_gw_h2_analytical` override because those tables are
+    # not bit-identical to interpax's autodiff slope of the value tables, and
+    # the registered gradient test compares to autodiff at places=15. The
+    # autodiff path through the interpax interpolators is fully traceable.
+
 
 class ResonantFeatureLog(NumericalTemplate):
     r"""
@@ -234,3 +297,7 @@ class ResonantFeatureLog(NumericalTemplate):
         return _resonant_feature_impl(
             frequency, A_resonant, omega_resonant, phase_resonant, self._interps
         )
+
+    # NOTE: see ResonantFeature — autodiff is preserved as the default
+    # backend because the precomputed coefficient-slope tables differ from
+    # interpax's autodiff slope of the value tables.

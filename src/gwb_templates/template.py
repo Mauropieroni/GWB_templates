@@ -462,8 +462,35 @@ class Template(ABC):
         """
 
     # ------------------------------------------------------------------
-    # Derivatives — dispatch on declared backend, no try/except
+    # Derivatives — dispatch order is: analytical override → declared backend
     # ------------------------------------------------------------------
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Array:
+        r"""
+        Optional hook for hand-rolled analytic
+        :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`.
+
+        Override on subclasses where the gradient has a clean closed form.
+        :meth:`grad_theta_omega_gw_h2` detects the override and dispatches
+        to it instead of going through autodiff / finite-difference.
+
+        Args:
+            frequency: Frequency value(s).
+            theta: Parameter vector (already coerced to ``parameter_names``
+                order by the dispatcher).
+            *args, **kwargs: Forwarded from the caller.
+
+        Returns:
+            Array of shape ``frequency.shape + (n_params,)`` — parameter
+            axis last, matching the autodiff / FD backends.
+        """
+        raise NotImplementedError
 
     def grad_theta_omega_gw_h2(
         self,
@@ -474,6 +501,14 @@ class Template(ABC):
     ) -> Array:
         r"""Evaluate :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
         theta = self._to_parameter_vector(parameters)
+        # Prefer subclass-provided analytic gradient when overridden.
+        if (
+            type(self)._grad_theta_omega_gw_h2_analytical
+            is not Template._grad_theta_omega_gw_h2_analytical
+        ):
+            return self._grad_theta_omega_gw_h2_analytical(
+                frequency, theta, *args, **kwargs
+            )
         if self.differentiation_backend == "autodiff":
             return gradient_autodiff(
                 self._omega_from_parameter_vector,

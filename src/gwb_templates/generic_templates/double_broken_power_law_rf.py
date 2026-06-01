@@ -15,8 +15,12 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
+from gwb_templates.generic_templates.double_broken_power_law import (
+    DoubleBrokenPowerLaw,
+)
 from gwb_templates.template import AnalyticTemplate
 
 ArrayLike: TypeAlias = jtp.ArrayLike
@@ -55,6 +59,10 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
         parameter_labels: Mapping[str, str] | None = None,
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
+        # Underlying single-DBPL helper used to delegate the analytic
+        # gradient via the chain rule.
+        self._dbpl = DoubleBrokenPowerLaw()
+
         default_labels = {
             "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
             "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
@@ -136,4 +144,41 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
             * x_1**n_1
             * (1.0 + x_1**a_1) ** ((n_2 - n_1) / a_1)
             * (1.0 + x_2**a_2) ** ((n_3 - n_2) / a_2)
+        )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian via the chain rule from
+        :class:`DoubleBrokenPowerLaw`.
+
+        Since :math:`\log f_1 = \log f_2 - \log r_f`,
+
+        - :math:`\partial/\partial(\log f_2) = J_{\log f_1} + J_{\log f_2}`
+        - :math:`\partial/\partial(\log r_f) = -J_{\log f_1}`
+
+        All other columns pass through unchanged.
+        """
+        log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2 = theta
+        log_f_1 = log_f_2 - log_r_f
+        theta_dbpl = jnp.stack(
+            [log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2]
+        )
+        # J columns: [logA, logf1, logf2, n1, n2, n3, a1, a2]
+        J = self._dbpl._grad_theta_omega_gw_h2_analytical(frequency, theta_dbpl)
+
+        d_logA = J[..., 0]
+        d_logf2 = J[..., 1] + J[..., 2]  # chain rule
+        d_logrf = -J[..., 1]  # chain rule
+        d_n1 = J[..., 3]
+        d_n2 = J[..., 4]
+        d_n3 = J[..., 5]
+        d_a1 = J[..., 6]
+        d_a2 = J[..., 7]
+
+        return jnp.stack(
+            [d_logA, d_logf2, d_logrf, d_n1, d_n2, d_n3, d_a1, d_a2], axis=-1
         )

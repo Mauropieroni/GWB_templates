@@ -112,6 +112,10 @@ class FlatResonant(NumericalTemplate):
         )
         return envelope * modulation
 
+    # NOTE: see ResonantFeature — autodiff is preserved as the default
+    # backend because the precomputed coefficient-slope tables differ from
+    # interpax's autodiff slope of the value tables.
+
 
 class FlatResonantLog(NumericalTemplate):
     r"""
@@ -190,3 +194,5 @@ class FlatResonantLog(NumericalTemplate):
             frequency, A_resonant, omega_resonant, phase_resonant, self._interps
         )
         return envelope * modulation
+
+    # NOTE: see ResonantFeature — autodiff preserved.

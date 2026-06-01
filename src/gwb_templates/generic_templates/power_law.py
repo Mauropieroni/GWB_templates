@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -116,3 +117,20 @@ class PowerLaw(AnalyticTemplate):
         """
         x = frequency / self.pivot
         return 10.0**log_amplitude * x**tilt
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the power-law spectrum.
+
+        :math:`\partial/\partial(\log_{10}A) = \text{model} \cdot \ln 10`,
+        :math:`\partial/\partial(\text{tilt}) = \text{model} \cdot \ln(f/f_{\rm pivot})`.
+        """
+        log_amplitude, tilt = theta
+        model = self.omega_gw_h2(frequency, log_amplitude, tilt)
+        d_logA = model * jnp.log(10.0)
+        d_tilt = model * jnp.log(frequency / self.pivot)
+        return jnp.stack((d_logA, d_tilt), axis=-1)

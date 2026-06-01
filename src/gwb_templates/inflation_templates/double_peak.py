@@ -136,3 +136,73 @@ class DoublePeak(AnalyticTemplate):
         second_term = log_normal * erfc_term
 
         return amplitude * (first_term + second_term)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian of the double-peak spectrum."""
+        log_amplitude, log_pivot, beta, k1, k2, rho, gamma = (
+            theta[0], theta[1], theta[2], theta[3], theta[4], theta[5], theta[6]
+        )
+        c1 = self.c1
+        tilt_p = self.tilt_p
+
+        amp = 10.0**log_amplitude
+        pivot = 10.0**log_pivot
+
+        x = jnp.asarray(frequency) / pivot
+        x1 = x / k1
+        c1_k1 = c1 / k1
+        log10x2 = jnp.log10(x / k2)
+        ln10 = jnp.log(10.0)
+
+        arg1 = jnp.abs((c1_k1 - x1) / (c1_k1 - 1.0))
+        exp1 = tilt_p * (c1_k1 - 1.0)
+        bump_factor = arg1**exp1
+        H = jnp.heaviside(c1_k1 - x1, 1.0)
+        first_term = beta * x1**tilt_p * bump_factor * H
+
+        log_normal = jnp.exp(-0.5 * (log10x2 / rho) ** 2)
+        erfc_val = jax.scipy.special.erfc(gamma * log10x2)
+        erfc_deriv = (2.0 / jnp.sqrt(jnp.pi)) * jnp.exp(-((gamma * log10x2) ** 2))
+        second_term = log_normal * erfc_val
+
+        model = amp * (first_term + second_term)
+
+        d_logA = ln10 * model
+
+        sign_c1_k1 = jnp.where(c1_k1 >= 1.0, 1.0, -1.0)
+        d_first_logpiv = (
+            amp
+            * first_term
+            * (-tilt_p * ln10 + sign_c1_k1 * exp1 / arg1 * (x1 / (c1_k1 - 1.0)) * ln10)
+        )
+        d_second_logpiv = (
+            amp * second_term * log10x2 / rho**2
+            + amp * log_normal * gamma * erfc_deriv
+        )
+        d_logpiv = d_first_logpiv + d_second_logpiv
+
+        d_beta = amp * first_term / beta
+
+        log_arg1 = jnp.log(arg1)
+        d_k1 = (
+            amp
+            * first_term
+            * (-tilt_p / k1 - log_arg1 * tilt_p * c1 / k1**2 + exp1 / (c1 - k1))
+        )
+
+        d_k2 = (
+            amp * log_normal * erfc_deriv * gamma / k2
+            + amp * second_term * log10x2 / (rho**2 * k2)
+        ) / ln10
+
+        d_rho = amp * second_term * log10x2**2 / rho**3
+
+        d_gamma = amp * log_normal * erfc_deriv * (-log10x2)
+
+        return jnp.stack(
+            [d_logA, d_logpiv, d_beta, d_k1, d_k2, d_rho, d_gamma], axis=-1
+        )

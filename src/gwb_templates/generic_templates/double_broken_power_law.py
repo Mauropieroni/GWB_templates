@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from typing import Any, ClassVar, TypeAlias
 
 import jax
+import jax.numpy as jnp
 import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
@@ -142,4 +143,76 @@ class DoubleBrokenPowerLaw(AnalyticTemplate):
             * x_1**n_1
             * (1.0 + x_1**a_1) ** ((n_2 - n_1) / a_1)
             * (1.0 + x_2**a_2) ** ((n_3 - n_2) / a_2)
+        )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the double broken power law.
+
+        Closed-form derivatives w.r.t. the 8 parameters
+        ``(log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2)``;
+        see the source for the full expressions.
+        """
+        log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2 = theta
+        x_1 = frequency / 10.0**log_f_1
+        x_2 = frequency / 10.0**log_f_2
+        r_12 = 10.0 ** (log_f_1 - log_f_2)
+        ln10 = jnp.log(10.0)
+        model = self.omega_gw_h2(
+            frequency, log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2
+        )
+
+        x1a1 = x_1**a_1
+        x2a1 = x_2**a_1
+        x2a2 = x_2**a_2
+        r12a1 = r_12**a_1
+
+        d_logA = model * ln10
+
+        d_logf1 = (
+            model * ln10 * (n_1 - n_2) * (x2a1 - 1.0) / ((1.0 + r12a1) * (1.0 + x1a1))
+        )
+
+        num_f2 = (
+            -n_1 * r12a1
+            - (n_3 + (n_1 + n_3) * r12a1) * x2a2
+            + n_2 * (r12a1 * x2a2 - 1.0)
+        )
+        d_logf2 = model * ln10 * num_f2 / ((1.0 + r12a1) * (1.0 + x2a2))
+
+        d_n1 = model * jnp.log((x1a1 + x2a1) / (1.0 + x1a1)) / a_1
+
+        d_n2 = model * (
+            -jnp.log(0.5 * (1.0 + x2a2)) / a_2
+            + jnp.log((r12a1 + x2a1) / (1.0 + r12a1)) / a_1
+        )
+
+        d_n3 = model * jnp.log(0.5 * (1.0 + x2a2)) / a_2
+
+        term_r = 1.0 + r12a1
+        term_1 = 1.0 + x1a1
+        prefactor_a1 = (n_2 - n_1) / a_1**2 / term_r / term_1
+        add1 = a_1 * jnp.log(r_12)
+        add2 = term_r * term_1 * jnp.log(term_r / r12a1)
+        add3 = -term_r * jnp.log(term_1)
+        add4 = x2a1 * (a_1 * jnp.log(x_1) - jnp.log(term_1))
+        add5 = x1a1 * (a_1 * jnp.log(x_2) - jnp.log(term_1))
+        d_a1 = model * prefactor_a1 * (add1 + add2 + add3 + add4 + add5)
+
+        prefactor_a2 = (n_3 - n_2) / a_2**2 / (1.0 + x2a2)
+        d_a2 = (
+            model
+            * prefactor_a2
+            * (
+                a_2 * x2a2 * jnp.log(x_2)
+                - (1.0 + x2a2) * jnp.log(0.5 * (1.0 + x2a2))
+            )
+        )
+
+        return jnp.stack(
+            [d_logA, d_logf1, d_logf2, d_n1, d_n2, d_n3, d_a1, d_a2], axis=-1
         )

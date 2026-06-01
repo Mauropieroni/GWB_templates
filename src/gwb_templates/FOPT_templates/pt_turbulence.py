@@ -22,6 +22,7 @@ import jax.typing as jtp
 from gwb_templates.FOPT_templates.pt_base import (
     a_hubble,
     double_broken_power_law,
+    jac_double_broken_power_law_amp_freqs,
     redshift_omega,
 )
 from gwb_templates.template import AnalyticTemplate
@@ -132,3 +133,71 @@ class PtTurbulence(AnalyticTemplate):
             a_1,
             a_2,
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the MHD-turbulence FOPT spectrum w.r.t.
+        ``(log_Omega_s, log_R_H_star, log_T_star)``.
+
+        Uses the chain rule through :func:`double_broken_power_law`.  The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives
+        vanish almost everywhere (consistent with autodiff through
+        :func:`jnp.select`).
+        """
+        log_Omega_s, log_R_H_star, log_T_star = theta[0], theta[1], theta[2]
+
+        Omega_s = 10.0**log_Omega_s
+        R_H_star = 10.0**log_R_H_star
+        T_star = 10.0**log_T_star
+
+        vA = jnp.sqrt(0.75 * Omega_s)
+        aH_star = a_hubble(T_star)
+        h2FGW0 = redshift_omega(T_star)
+
+        f_1 = vA / self.N_EDDY * aH_star / R_H_star
+        f_2 = 2.2 * aH_star / R_H_star
+        r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
+
+        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        norm = (
+            r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        )
+        prefactor = (
+            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
+        )
+        h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
+
+        J_inner = jac_double_broken_power_law_amp_freqs(
+            frequency,
+            jnp.log10(h2Omega2),
+            jnp.log10(f_1),
+            jnp.log10(f_2),
+            n_1,
+            n_2,
+            n_3,
+            a_1,
+            a_2,
+        )  # shape (..., 3)
+
+        # h2Omega2 ∝ norm(r_f) * vA * Omega_s^2 * R^2,  r_f ∝ Omega_s^{-1/2}
+        # d log_h2Omega2/d log_Omega_s = 1 + r_f^{a_1}/(1 + r_f^{a_1})
+        # d log_h2Omega2/d log_R_H_star = 2
+        # d log_h2Omega2/d log_T_star = 0
+        # f_1 ∝ vA * aH_star / R,  vA ∝ Omega_s^{1/2},  aH_star ∝ T
+        # f_2 ∝ aH_star / R
+        rf_a1 = r_f**a_1
+        d_logOmega2_d_logOs = 1.0 + rf_a1 / (1.0 + rf_a1)
+
+        dq_dp = jnp.array(
+            [
+                [d_logOmega2_d_logOs, 2.0, 0.0],  # log_h2Omega2
+                [0.5, -1.0, 1.0],  # log_f_1
+                [0.0, -1.0, 1.0],  # log_f_2
+            ]
+        )
+
+        return J_inner @ dq_dp

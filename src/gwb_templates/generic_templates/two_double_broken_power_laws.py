@@ -185,3 +185,82 @@ class TwoDoubleBrokenPowerLaws(AnalyticTemplate):
             a_22,
         )
         return jnp.asarray(dbpl_1 + dbpl_2)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian via the chain rule from
+        :class:`DoubleBrokenPowerLaw`.
+
+        Reparametrisation:
+        :math:`\log A_2 = \log A_1 + \log r_{A,2}`,
+        :math:`\log f_{11} = \log f_{12} - \log r_{f,12}`,
+        :math:`\log f_{21} = \log f_{11} + \log r_{f,21}`,
+        :math:`\log f_{22} = \log f_{11} + \log r_{f,22}`.
+        """
+        (
+            log_amp_1,
+            log_r_amp_2,
+            log_f_12,
+            log_r_f_12,
+            log_r_f_21,
+            log_r_f_22,
+            n_11,
+            n_12,
+            n_13,
+            a_11,
+            a_12,
+            n_21,
+            n_22,
+            n_23,
+            a_21,
+            a_22,
+        ) = theta
+
+        log_amp_2 = log_amp_1 + log_r_amp_2
+        log_f_11 = log_f_12 - log_r_f_12
+        log_f_21 = log_f_11 + log_r_f_21
+        log_f_22 = log_f_11 + log_r_f_22
+
+        theta1 = jnp.stack(
+            [log_amp_1, log_f_11, log_f_12, n_11, n_12, n_13, a_11, a_12]
+        )
+        theta2 = jnp.stack(
+            [log_amp_2, log_f_21, log_f_22, n_21, n_22, n_23, a_21, a_22]
+        )
+
+        # (..., 8) columns: [logA, logf1, logf2, n1, n2, n3, a1, a2]
+        J1 = self._dbpl._grad_theta_omega_gw_h2_analytical(frequency, theta1)
+        J2 = self._dbpl._grad_theta_omega_gw_h2_analytical(frequency, theta2)
+
+        d_logamp1 = J1[..., 0] + J2[..., 0]
+        d_logr_amp2 = J2[..., 0]
+        d_logf12 = J1[..., 1] + J1[..., 2] + J2[..., 1] + J2[..., 2]
+        d_logrf12 = -J1[..., 1] - J2[..., 1] - J2[..., 2]
+        d_logrf21 = J2[..., 1]
+        d_logrf22 = J2[..., 2]
+
+        return jnp.stack(
+            [
+                d_logamp1,
+                d_logr_amp2,
+                d_logf12,
+                d_logrf12,
+                d_logrf21,
+                d_logrf22,
+                J1[..., 3],
+                J1[..., 4],
+                J1[..., 5],
+                J1[..., 6],
+                J1[..., 7],
+                J2[..., 3],
+                J2[..., 4],
+                J2[..., 5],
+                J2[..., 6],
+                J2[..., 7],
+            ],
+            axis=-1,
+        )

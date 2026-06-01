@@ -81,3 +81,19 @@ class Amplitude(AnalyticTemplate):
             frequency.
         """
         return 10.0**log_amplitude * jnp.ones_like(frequency)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the flat spectrum.
+
+        :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial(\log_{10}A)
+        = \Omega_{\mathrm{GW}} h^2 \cdot \ln 10`.
+        """
+        (log_amplitude,) = theta
+        model = self.omega_gw_h2(frequency, log_amplitude)
+        d_logA = model * jnp.log(10.0)
+        return d_logA[..., None]

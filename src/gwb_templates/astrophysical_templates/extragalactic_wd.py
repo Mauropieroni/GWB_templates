@@ -99,6 +99,38 @@ class ExtragalacticWd(AnalyticTemplate):
         power = (alpha1 - alpha2) * delta
         return 10.0**log_amplitude * low_pl * H**power
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian; columns [log_amplitude, f_knee, delta, alpha1, alpha2]."""
+        log_amplitude, f_knee, delta, alpha1, alpha2 = (
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+            theta[4],
+        )
+        fvec = jnp.asarray(frequency)
+        x = fvec / f_knee
+        x_inv_delta = x ** (1.0 / delta)
+        factor = 1.0 + x_inv_delta
+        H = 0.5 * factor
+        power = (alpha1 - alpha2) * delta
+        model = self.omega_gw_h2(fvec, log_amplitude, f_knee, delta, alpha1, alpha2)
+
+        d_logA = model * jnp.log(10.0)
+        d_fknee = model / f_knee * (alpha1 - (power / H) * (0.5 / delta) * x_inv_delta)
+        d_delta = model * (alpha1 - alpha2) * (
+            jnp.log(H) - x_inv_delta * jnp.log(x) / (delta * factor)
+        )
+        d_alpha1 = model * (-jnp.log(x) + delta * jnp.log(H))
+        d_alpha2 = model * delta * (jnp.log(2.0) - jnp.log(factor))
+        return jnp.stack(
+            [d_logA, d_fknee, d_delta, d_alpha1, d_alpha2], axis=-1
+        )
+
 
 class ExtragalacticWdA(AnalyticTemplate):
     r"""
@@ -166,3 +198,12 @@ class ExtragalacticWdA(AnalyticTemplate):
         H = 0.5 * (1.0 + x ** (1.0 / self.delta))
         power = (self.alpha1 - self.alpha2) * self.delta
         return 10.0**log_amplitude * low_pl * H**power
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian; single column d/d(log_amplitude)."""
+        model = self.omega_gw_h2(jnp.asarray(frequency), theta[0])
+        return (model * jnp.log(10.0))[..., None]

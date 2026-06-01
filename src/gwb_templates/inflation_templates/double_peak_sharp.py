@@ -35,6 +35,73 @@ from gwb_templates.template import AnalyticTemplate
 ArrayLike: TypeAlias = jtp.ArrayLike
 
 
+def _double_peak_envelope_and_grad(
+    frequency: ArrayLike,
+    log_amplitude: ArrayLike,
+    log_pivot: ArrayLike,
+    beta: ArrayLike,
+    k1: ArrayLike,
+    k2: ArrayLike,
+    rho: ArrayLike,
+    gamma: ArrayLike,
+    c1: float,
+    tilt_p: float,
+) -> tuple[jax.Array, jax.Array]:
+    """Return (envelope, dE/dpars) with pars ordered like the envelope signature."""
+    amp = 10.0**log_amplitude
+    pivot = 10.0**log_pivot
+
+    x = jnp.asarray(frequency) / pivot
+    x1 = x / k1
+    c1_k1 = c1 / k1
+    log10x2 = jnp.log10(x / k2)
+    ln10 = jnp.log(10.0)
+
+    arg1 = jnp.abs((c1_k1 - x1) / (c1_k1 - 1.0))
+    exp1 = tilt_p * (c1_k1 - 1.0)
+    bump_factor = arg1**exp1
+    H = jnp.heaviside(c1_k1 - x1, 1.0)
+    first_term = beta * x1**tilt_p * bump_factor * H
+
+    log_normal = jnp.exp(-0.5 * (log10x2 / rho) ** 2)
+    erfc_val = jax.scipy.special.erfc(gamma * log10x2)
+    erfc_deriv = (2.0 / jnp.sqrt(jnp.pi)) * jnp.exp(-((gamma * log10x2) ** 2))
+    second_term = log_normal * erfc_val
+
+    envelope = amp * (first_term + second_term)
+
+    d_logA = ln10 * envelope
+    sign_c1_k1 = jnp.where(c1_k1 >= 1.0, 1.0, -1.0)
+    d_first_logpiv = (
+        amp
+        * first_term
+        * (-tilt_p * ln10 + sign_c1_k1 * exp1 / arg1 * (x1 / (c1_k1 - 1.0)) * ln10)
+    )
+    d_second_logpiv = (
+        amp * second_term * log10x2 / rho**2
+        + amp * log_normal * gamma * erfc_deriv
+    )
+    d_logpiv = d_first_logpiv + d_second_logpiv
+    d_beta = amp * first_term / beta
+    log_arg1 = jnp.log(arg1)
+    d_k1 = (
+        amp
+        * first_term
+        * (-tilt_p / k1 - log_arg1 * tilt_p * c1 / k1**2 + exp1 / (c1 - k1))
+    )
+    d_k2 = (
+        amp * log_normal * erfc_deriv * gamma / k2
+        + amp * second_term * log10x2 / (rho**2 * k2)
+    ) / ln10
+    d_rho = amp * second_term * log10x2**2 / rho**3
+    d_gamma = amp * log_normal * erfc_deriv * (-log10x2)
+
+    dE = jnp.stack(
+        [d_logA, d_logpiv, d_beta, d_k1, d_k2, d_rho, d_gamma], axis=-1
+    )
+    return envelope, dE
+
+
 def _double_peak_envelope(
     frequency: ArrayLike,
     log_amplitude: ArrayLike,
@@ -178,6 +245,26 @@ class DoublePeakSharp(AnalyticTemplate):
         modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
         return envelope * modulation
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on envelope x sharp-feature."""
+        freq = jnp.asarray(frequency)
+        E, dE = _double_peak_envelope_and_grad(
+            freq, theta[0], theta[1], theta[2], theta[3], theta[4], theta[5],
+            theta[6], self.c1, self.tilt_p,
+        )
+        A_sharp, omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
+        arg = omega_sharp_Hz * freq + phase_sharp
+        F = 1.0 + A_sharp * jnp.cos(arg)
+        d_A = jnp.cos(arg)
+        d_omega = -A_sharp * jnp.sin(arg) * freq
+        d_phi = -A_sharp * jnp.sin(arg)
+        dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
+        return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
+
 
 class DoublePeakSharpLog(AnalyticTemplate):
     r"""
@@ -273,3 +360,26 @@ class DoublePeakSharpLog(AnalyticTemplate):
         omega_sharp_Hz = 10.0**log_omega_sharp_Hz
         modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
         return envelope * modulation
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on envelope x log sharp-feature."""
+        freq = jnp.asarray(frequency)
+        E, dE = _double_peak_envelope_and_grad(
+            freq, theta[0], theta[1], theta[2], theta[3], theta[4], theta[5],
+            theta[6], self.c1, self.tilt_p,
+        )
+        log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
+        A_sharp = 10.0**log_A_sharp
+        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
+        arg = omega_sharp_Hz * freq + phase_sharp
+        F = 1.0 + A_sharp * jnp.cos(arg)
+        ln10 = jnp.log(10.0)
+        d_logA = ln10 * A_sharp * jnp.cos(arg)
+        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * freq
+        d_phi = -A_sharp * jnp.sin(arg)
+        dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
+        return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

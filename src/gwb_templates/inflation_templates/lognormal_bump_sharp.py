@@ -42,6 +42,25 @@ def _lognormal_bump_envelope(
     return amplitude * jnp.exp(-0.5 * (jnp.log10(frequency / pivot) / width) ** 2)
 
 
+def _lognormal_bump_envelope_and_grad(
+    frequency: ArrayLike,
+    log_amplitude: ArrayLike,
+    log_pivot: ArrayLike,
+    log_width: ArrayLike,
+) -> tuple[jax.Array, jax.Array]:
+    """Return (envelope, d envelope / d[log_A, log_pivot, log_width])."""
+    pivot = 10.0**log_pivot
+    width = 10.0**log_width
+    envelope = _lognormal_bump_envelope(frequency, log_amplitude, log_pivot, log_width)
+    u = jnp.log10(jnp.asarray(frequency) / pivot)
+    ln10 = jnp.log(10.0)
+    d_logA = envelope * ln10
+    d_logpiv = envelope * u / width**2
+    d_logwid = envelope * u**2 * ln10 / width**2
+    dE = jnp.stack([d_logA, d_logpiv, d_logwid], axis=-1)
+    return envelope, dE
+
+
 _ENVELOPE_LABELS = {
     "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
     "log_pivot": r"$\log_{10}(f_*/\mathrm{Hz})$",
@@ -125,6 +144,23 @@ class LognormalBumpSharp(AnalyticTemplate):
         modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
         return envelope * modulation
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on lognormal-bump x sharp-feature."""
+        freq = jnp.asarray(frequency)
+        E, dE = _lognormal_bump_envelope_and_grad(freq, theta[0], theta[1], theta[2])
+        A_sharp, omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
+        arg = omega_sharp_Hz * freq + phase_sharp
+        F = 1.0 + A_sharp * jnp.cos(arg)
+        d_A = jnp.cos(arg)
+        d_omega = -A_sharp * jnp.sin(arg) * freq
+        d_phi = -A_sharp * jnp.sin(arg)
+        dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
+        return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
+
 
 class LognormalBumpSharpLog(AnalyticTemplate):
     r"""
@@ -199,3 +235,23 @@ class LognormalBumpSharpLog(AnalyticTemplate):
         omega_sharp_Hz = 10.0**log_omega_sharp_Hz
         modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
         return envelope * modulation
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on lognormal-bump x log sharp-feature."""
+        freq = jnp.asarray(frequency)
+        E, dE = _lognormal_bump_envelope_and_grad(freq, theta[0], theta[1], theta[2])
+        log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
+        A_sharp = 10.0**log_A_sharp
+        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
+        arg = omega_sharp_Hz * freq + phase_sharp
+        F = 1.0 + A_sharp * jnp.cos(arg)
+        ln10 = jnp.log(10.0)
+        d_logA = ln10 * A_sharp * jnp.cos(arg)
+        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * freq
+        d_phi = -A_sharp * jnp.sin(arg)
+        dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
+        return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

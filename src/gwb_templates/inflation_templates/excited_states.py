@@ -95,3 +95,42 @@ class ExcitedStates(AnalyticTemplate):
         factor_3 = (jnp.sin(x) - 4.0 * jnp.sin(x / 2.0) ** 2 / x) ** 2
 
         return factor_1 * factor_2 * factor_3 * jnp.heaviside(x_cut - x, 1.0)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian of ``omega_gw_h2`` w.r.t. theta.
+
+        Heaviside boundary delta is ignored (consistent with ``jnp.heaviside``).
+        """
+        log_amplitude, log_gamma_ES, log_omega_ES = theta[0], theta[1], theta[2]
+
+        amplitude = 10.0**log_amplitude
+        gamma_ES = 10.0**log_gamma_ES
+
+        fvec = jnp.asarray(frequency)
+        x = 0.5 * fvec * 10.0**log_omega_ES
+        x_cut = 2.0 * gamma_ES
+        u = x / x_cut
+
+        H = jnp.heaviside(x_cut - x, 1.0)
+        factor_1 = amplitude / 0.052 * x ** (-3)
+        factor_2 = (1.0 - u**2) ** 2
+        g = jnp.sin(x) - 4.0 * jnp.sin(x / 2.0) ** 2 / x
+        factor_3 = g**2
+        model = factor_1 * factor_2 * factor_3 * H
+
+        ln10 = jnp.log(10.0)
+
+        d_logA = model * ln10
+        d_lgam = factor_1 * factor_3 * H * 4.0 * ln10 * u**2 * (1.0 - u**2)
+        dg_dx = jnp.cos(x) - 2.0 * jnp.sin(x) / x + 2.0 * (1.0 - jnp.cos(x)) / x**2
+        d_lomega = H * (
+            factor_1 * (-3.0 * ln10) * factor_2 * factor_3
+            + factor_1 * (-4.0 * ln10 * u**2 * (1.0 - u**2)) * factor_3
+            + factor_1 * factor_2 * (2.0 * g * dg_dx * x * ln10)
+        )
+
+        return jnp.stack([d_logA, d_lgam, d_lomega], axis=-1)

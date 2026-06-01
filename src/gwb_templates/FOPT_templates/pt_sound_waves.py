@@ -23,6 +23,7 @@ from gwb_templates.FOPT_templates.pt_base import (
     a_hubble,
     double_broken_power_law,
     h_star_tau,
+    jac_double_broken_power_law_amp_freqs,
     redshift_omega,
 )
 from gwb_templates.template import AnalyticTemplate
@@ -135,3 +136,86 @@ class PtSoundWaves(AnalyticTemplate):
             a_1,
             a_2,
         )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the sound-wave FOPT spectrum w.r.t.
+        ``(log_K, log_R_H_star, xi_w, log_T_star)``.
+
+        Uses the chain rule through :func:`double_broken_power_law`.  The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives
+        vanish almost everywhere (consistent with autodiff through
+        :func:`jnp.select`).
+        """
+        log_K, log_R_H_star, xi_w, log_T_star = (
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+        )
+
+        K = 10.0**log_K
+        R_H_star = 10.0**log_R_H_star
+        T_star = 10.0**log_T_star
+
+        c_s = self.SOUND_SPEED
+        xi_shell = jnp.abs(xi_w - c_s)
+        xi_bubble = jnp.maximum(xi_w, c_s)
+
+        aH_star = a_hubble(T_star)
+        h2FGW0 = redshift_omega(T_star)
+        H_tau = h_star_tau(K, R_H_star)
+
+        f_1 = 0.2 * aH_star / R_H_star
+        f_2 = 0.5 * aH_star / R_H_star * xi_bubble / xi_shell
+        r_f = 2.5 * xi_bubble / xi_shell
+        norm = (jnp.sqrt(2.0) + 2.0 * r_f / (1.0 + r_f**2)) / jnp.pi
+        h2Omega2 = (
+            norm * h2FGW0 * self.AMPLITUDE_PREFACTOR * K**2 * H_tau * R_H_star
+        )
+
+        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        J_inner = jac_double_broken_power_law_amp_freqs(
+            frequency,
+            jnp.log10(h2Omega2),
+            jnp.log10(f_1),
+            jnp.log10(f_2),
+            n_1,
+            n_2,
+            n_3,
+            a_1,
+            a_2,
+        )  # shape (..., 3)
+
+        ln10 = jnp.log(10.0)
+
+        # d(log_h2Omega2)/d(log_K), d(log_h2Omega2)/d(log_R_H_star):
+        # H_tau = min(1, R/sqrt(0.75*K))
+        # When H_tau < 1: K^2*H_tau*R ∝ K^{1.5}*R^2  →  1.5, 2
+        # When H_tau == 1: K^2*H_tau*R ∝ K^2*R       →  2.0, 1
+        d_logOmega2_d_logK = jnp.where(H_tau < 1.0, 1.5, 2.0)
+        d_logOmega2_d_logR = jnp.where(H_tau < 1.0, 2.0, 1.0)
+        d_norm_d_rf = 2.0 * (1.0 - r_f**2) / (jnp.pi * (1.0 + r_f**2) ** 2)
+        d_rf_d_xiw = -2.5 * c_s * jnp.sign(xi_w - c_s) / xi_shell**2
+        d_logOmega2_d_xiw = d_norm_d_rf * d_rf_d_xiw / (norm * ln10)
+
+        d_logf2_d_xiw = -c_s * jnp.sign(xi_w - c_s) / (xi_shell * xi_bubble * ln10)
+
+        dq_dp = jnp.array(
+            [
+                [
+                    d_logOmega2_d_logK,
+                    d_logOmega2_d_logR,
+                    d_logOmega2_d_xiw,
+                    0.0,
+                ],  # log_h2Omega2
+                [0.0, -1.0, 0.0, 1.0],  # log_f_1
+                [0.0, -1.0, d_logf2_d_xiw, 1.0],  # log_f_2
+            ]
+        )
+
+        return J_inner @ dq_dp
