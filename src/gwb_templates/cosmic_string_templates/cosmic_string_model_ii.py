@@ -17,12 +17,11 @@ from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 import numpy as np
 
-from gwb_templates.template import NumericalTemplate
+from gwb_templates.template import NumericalTemplate, DifferentiationBackend
 
-ArrayLike: TypeAlias = jtp.ArrayLike
+ArrayLike: TypeAlias = float | int | np.ndarray | jax.Array
 
 _DEFAULT_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -54,7 +53,7 @@ def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
 def _to_frac_ix(val: ArrayLike, axis: jax.Array) -> jax.Array:
     """Convert a physical value to a fractional grid index along ``axis``."""
     n = axis.shape[0]
-    return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
+    return jnp.asarray((val - axis[0]) / (axis[-1] - axis[0]) * (n - 1))
 
 
 def _bilinear_eval(
@@ -143,7 +142,7 @@ class CosmicStringModelII(NumericalTemplate):
     """
 
     jittable: ClassVar[bool] = True
-    differentiation_backend: ClassVar[str] = "autodiff"
+    differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
 
     bibtex_entries: ClassVar[tuple[str, ...]] = ()  # TODO: cite
 
@@ -219,9 +218,7 @@ class CosmicStringModelII(NumericalTemplate):
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
 
-        S = _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        S = _bilinear_eval(ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid)
         h2_omega = 10.0**S
 
         d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
@@ -251,7 +248,7 @@ class AbelianHiggsModelII(NumericalTemplate):
     """
 
     jittable: ClassVar[bool] = True
-    differentiation_backend: ClassVar[str] = "autodiff"
+    differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
 
     bibtex_entries: ClassVar[tuple[str, ...]] = ()  # TODO: cite
 
@@ -312,7 +309,7 @@ class AbelianHiggsModelII(NumericalTemplate):
         spectrum = 10.0 ** _bilinear_eval(
             ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
         )
-        return 10.0**logf * spectrum
+        return jnp.asarray(10.0**logf * spectrum)
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -326,9 +323,7 @@ class AbelianHiggsModelII(NumericalTemplate):
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
 
-        S = _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        S = _bilinear_eval(ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid)
         h2_omega_ii = 10.0**S
         h2_omega_ah = 10.0**logf * h2_omega_ii
 
@@ -337,9 +332,7 @@ class AbelianHiggsModelII(NumericalTemplate):
         dS_dix = _bilinear_dS_dix(
             ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
         )
-        d_d_log_Gmu = (
-            10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
-        )
+        d_d_log_Gmu = 10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
         # d/d(logf)
         d_d_logf = jnp.log(10.0) * h2_omega_ah
 

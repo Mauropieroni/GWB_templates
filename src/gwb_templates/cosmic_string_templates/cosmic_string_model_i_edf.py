@@ -11,12 +11,11 @@ Reference: arXiv:2405.03740, Section 4.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
-import jax.typing as jtp
-import numpy as np
-import scipy.special as sc
+import jax.numpy as jnp
+import jax.scipy.special as jsc
 
 from gwb_templates import constants as ct
 from gwb_templates.template import NumericalTemplate
@@ -39,8 +38,6 @@ from gwb_templates.cosmic_string_templates.cosmic_string_model_i import (
     _xi_r,
 )
 
-ArrayLike: TypeAlias = jtp.ArrayLike
-
 Delta1_gr, Delta2_gr, Delta3_gr, Delta4_gr = (
     _Delta_gr[0],
     _Delta_gr[1],
@@ -54,15 +51,20 @@ _T_EXTRA_MIN = 0.005  # GeV
 # ── Extra-DOF helpers ─────────────────────────────────────────────────────────
 
 
-def _delta_gr_from_delta(g0: float, Dg_Extra: float, delta: float) -> float:
+def _delta_gr_from_delta(
+    g0: float | jax.Array, Dg_Extra: jax.Array, delta: jax.Array
+) -> jax.Array:
     """Rescale a DOF ratio to account for extra BSM degrees of freedom."""
     return (g0 / (Dg_Extra + g0 / delta**3)) ** (1.0 / 3.0)
 
 
 def _get_Delta_gr_extra(
-    Gmu: float, alpha: float, T_Extra: float, Dg_Extra: float
-) -> tuple[np.ndarray, np.ndarray]:
+    Gmu: jax.Array, alpha: jax.Array, T_Extra: jax.Array, Dg_Extra: jax.Array
+) -> tuple[jax.Array, jax.Array]:
     """Compute modified DOF ratios and scale factors with an extra BSM species."""
+    # Convert to plain Python scalars: this function builds variable-length
+    # numpy arrays using Python-level branching, so it is always called eagerly.
+
     if T_Extra < _T_EXTRA_MIN:
         raise ValueError(f"T_Extra = {T_Extra:.3g} GeV must be >= {_T_EXTRA_MIN} GeV")
 
@@ -78,7 +80,7 @@ def _get_Delta_gr_extra(
         )
 
     nsm = len(_Delta_gr)
-    T_star = np.array(
+    T_star = jnp.array(
         [
             ct.T0_CMB_GeV * _a0 * _Delta_gr[i] / _get_an_star(Gmu, alpha, i)
             for i in range(nsm)
@@ -90,29 +92,29 @@ def _get_Delta_gr_extra(
     for i in range(nsm):
         if T_Extra_eff < T_star[nsm - i - 1]:
             flag = nsm - i
-            T_star = np.insert(T_star, flag, T_Extra_eff)
-            Delta_gr_extra = np.insert(_Delta_gr, flag, _Delta_gr[flag - 1])
+            T_star = jnp.insert(T_star, flag, T_Extra_eff)
+            Delta_gr_extra = jnp.insert(_Delta_gr, flag, _Delta_gr[flag - 1])
             for j in range(flag):
-                Delta_gr_extra[j] = _delta_gr_from_delta(
-                    g0, Dg_Extra, Delta_gr_extra[j]
+                Delta_gr_extra.at[j].set(
+                    _delta_gr_from_delta(g0, Dg_Extra, Delta_gr_extra[j])
                 )
             break
         elif T_Extra_eff == T_star[nsm - i - 1]:
             flag = nsm - i
             Delta_gr_extra = _Delta_gr.copy()
             for j in range(flag - 1):
-                Delta_gr_extra[j] = _delta_gr_from_delta(
-                    g0, Dg_Extra, Delta_gr_extra[j]
+                Delta_gr_extra.at[j].set(
+                    _delta_gr_from_delta(g0, Dg_Extra, Delta_gr_extra[j])
                 )
             break
 
-    a_star_dof = _a0 * np.append(Delta_gr_extra * ct.T0_CMB_GeV / T_star, ct.a_eq)
+    a_star_dof = _a0 * jnp.append(Delta_gr_extra * ct.T0_CMB_GeV / T_star, ct.a_eq)
     return Delta_gr_extra, a_star_dof
 
 
 def _get_A_n_extra(
-    f_eV: np.ndarray, Gmu: float, a_star_dof: np.ndarray, epoch: int
-) -> np.ndarray:
+    f_eV: jax.Array, Gmu: jax.Array, a_star_dof: jax.Array, epoch: int
+) -> jax.Array:
     """Integration bound Script-A_n with EDF scale factors (Eq. A.19)."""
     D_r = _get_D(_nu_r, ct.Omega_R, Gmu)
     a_star_n = a_star_dof[epoch] / _a0
@@ -120,38 +122,37 @@ def _get_A_n_extra(
 
 
 def _Omega_r_dof_edf(
-    f_eV: np.ndarray,
-    Gmu: float,
-    alpha: float,
-    q: float,
-    T_Extra: float,
-    Dg_Extra: float,
-    N: np.ndarray,
-) -> np.ndarray:
+    f_eV: jax.Array,
+    Gmu: jax.Array,
+    alpha: jax.Array,
+    q: jax.Array,
+    T_Extra: jax.Array,
+    Dg_Extra: jax.Array,
+    N: jax.Array,
+) -> jax.Array:
     """Radiation-era loops with extra BSM DOF (Eq. A.18 with modified DOF history)."""
-    Cr = _get_C_r_no_dof(Gmu, alpha) / sc.zeta(q)
+    Cr = _get_C_r_no_dof(Gmu, alpha) / jsc.zeta(q, 1.0)
     Delta_gr_extra, a_star_dof = _get_Delta_gr_extra(Gmu, alpha, T_Extra, Dg_Extra)
     A_all = [
         _get_A_n_extra(f_eV, Gmu, a_star_dof, i) for i in range(len(Delta_gr_extra) + 1)
     ]
-    total = 0.0
+    total = jnp.zeros_like(f_eV)
     for i, dg in enumerate(Delta_gr_extra):
-        A_now = np.sqrt(dg) * A_all[i]
-        A_next = np.sqrt(dg) * A_all[i + 1]
-        total += dg * _M_delta(-q, A_next, A_now, N)
+        A_now = jnp.sqrt(dg) * A_all[i]
+        A_next = jnp.sqrt(dg) * A_all[i + 1]
+        total = total + dg * _M_delta(-q, A_next, A_now, N)
     return Cr * total
 
 
 def _compute_spectrum_edf(
-    freq: np.ndarray,
-    log_Gmu: float,
-    log_alpha: float,
-    q: float,
-    log_T_Extra: float,
-    Dg_Extra: float,
-) -> np.ndarray:
-    """Evaluate h^2 * Omega_GW(freq) for the EDF variant (no log-interpolation)."""
-    freq = np.asarray(freq)
+    freq: jax.Array,
+    log_Gmu: jax.Array,
+    log_alpha: jax.Array,
+    q: jax.Array,
+    log_T_Extra: jax.Array,
+    Dg_Extra: jax.Array,
+) -> jax.Array:
+    """Evaluate h^2 * Omega_GW(freq) for the EDF variant."""
     f_eV = freq * ct.h_bar_eV_s
     Gmu = 10.0**log_Gmu
     alpha = 10.0**log_alpha
@@ -160,29 +161,27 @@ def _compute_spectrum_edf(
     f_min_r = _get_f_min_r(Gmu, alpha)
     f_min_m = _get_f_min_m(Gmu, alpha)
 
-    Omega = np.zeros(len(freq))
+    N_r = jnp.maximum(1.0, jnp.floor(f_eV / f_min_r))
+    N_m = jnp.maximum(1.0, jnp.floor(f_eV / f_min_m))
 
+    # Python if — eager only (NumericalTemplate)
     if alpha > _Gamma * Gmu * _xi_r:
-        mask_r = f_eV >= f_min_r
-        if mask_r.any():
-            fn_r = f_eV[mask_r]
-            N_r = np.floor(fn_r / f_min_r)
-            Omega[mask_r] += _Omega_r_dof_edf(
-                fn_r, Gmu, alpha, q, T_Extra, Dg_Extra, N_r
-            )
-        mask_m = f_eV >= f_min_m
-        if mask_m.any():
-            fn_m = f_eV[mask_m]
-            N_m = np.floor(fn_m / f_min_m)
-            Omega[mask_m] += _Omega_rm(fn_m, Gmu, alpha, q, N_m)
-            if alpha < 1e-3:
-                Omega[mask_m] += _Omega_m(fn_m, Gmu, alpha, q, N_m)
+        omega_r = jnp.where(
+            f_eV >= f_min_r,
+            _Omega_r_dof_edf(f_eV, Gmu, alpha, q, T_Extra, Dg_Extra, N_r),
+            0.0,
+        )
+        omega_rm = jnp.where(f_eV >= f_min_m, _Omega_rm(f_eV, Gmu, alpha, q, N_m), 0.0)
+        omega_m = jnp.where(f_eV >= f_min_m, _Omega_m(f_eV, Gmu, alpha, q, N_m), 0.0)
+        # Matter-era loops only contribute in the small-alpha regime.
+        omega_m_contrib = jnp.where(alpha < 1e-3, omega_m, jnp.zeros_like(f_eV))
+        Omega = omega_r + omega_rm + omega_m_contrib
     else:
-        mask_m = f_eV > f_min_m
-        if mask_m.any():
-            fn_m = f_eV[mask_m]
-            N_m = np.floor(fn_m / f_min_m)
-            Omega[mask_m] += _Omega_small_alpha(fn_m, Gmu, alpha, q, N_m)
+        Omega = jnp.where(
+            f_eV > f_min_m,
+            _Omega_small_alpha(f_eV, Gmu, alpha, q, N_m),
+            0.0,
+        )
 
     return Omega * ct.h**2
 
@@ -262,14 +261,13 @@ class CosmicStringModelIEdf(NumericalTemplate):
         log_T_Extra: jax.Array,
         Dg_Extra: jax.Array,
     ) -> jax.Array:
-        freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(
-            freq,
+            frequency,
             _compute_spectrum_edf,
-            float(log_Gmu),
-            float(log_alpha),
-            float(q),
-            float(log_T_Extra),
-            float(Dg_Extra),
+            log_Gmu,
+            log_alpha,
+            q,
+            log_T_Extra,
+            Dg_Extra,
             n_points=self.n_interp_points,
         )
