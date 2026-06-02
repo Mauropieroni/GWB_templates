@@ -126,12 +126,12 @@ class GalacticBinaries(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        alpha: ArrayLike,
-        log_fr1: ArrayLike,
-        log_frk: ArrayLike,
-        log_fr2: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        alpha: jax.Array,
+        log_fr1: jax.Array,
+        log_frk: jax.Array,
+        log_fr2: jax.Array,
     ) -> jax.Array:
         fvec = jnp.asarray(frequency)
         fr1 = 10.0**log_fr1
@@ -150,7 +150,8 @@ class GalacticBinaries(AnalyticTemplate):
         frequency: ArrayLike,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian; columns [log_amplitude, alpha, log_fr1, log_frk, log_fr2]."""
+        """Analytic Jacobian;
+        columns [log_amplitude, alpha, log_fr1, log_frk, log_fr2]."""
         log_amplitude, alpha, log_fr1, log_frk, log_fr2 = (
             theta[0],
             theta[1],
@@ -164,18 +165,14 @@ class GalacticBinaries(AnalyticTemplate):
         fr2 = 10.0**log_fr2
         u1 = (fvec / fr1) ** alpha
         t = jnp.tanh(-(fvec - frk) / fr2)
-        model = self.omega_gw_h2(
-            fvec, log_amplitude, alpha, log_fr1, log_frk, log_fr2
-        )
+        model = self.omega_gw_h2(fvec, log_amplitude, alpha, log_fr1, log_frk, log_fr2)
         ln10 = jnp.log(10.0)
         d_logA = model * ln10
         d_alpha = model * (-u1 * jnp.log(fvec / fr1))
         d_logfr1 = model * (alpha * ln10 * u1)
         d_logfrk = model * (1.0 - t) * frk * ln10 / fr2
         d_logfr2 = model * (1.0 - t) * (fvec - frk) * ln10 / fr2
-        return jnp.stack(
-            [d_logA, d_alpha, d_logfr1, d_logfrk, d_logfr2], axis=-1
-        )
+        return jnp.stack([d_logA, d_alpha, d_logfr1, d_logfrk, d_logfr2], axis=-1)
 
 
 class GalacticBinariesA(AnalyticTemplate):
@@ -241,8 +238,8 @@ class GalacticBinariesA(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
     ) -> jax.Array:
         fvec = jnp.asarray(frequency)
         fr1 = 10.0**self.log_fr1

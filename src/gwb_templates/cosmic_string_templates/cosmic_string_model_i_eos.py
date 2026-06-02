@@ -195,7 +195,9 @@ class CosmicStringModelIEos(NumericalTemplate):
         super().__init__(
             model_name=model_name,
             model_label=(
-                model_label if model_label is not None else "Cosmic String Model I (EOS)"
+                model_label
+                if model_label is not None
+                else "Cosmic String Model I (EOS)"
             ),
             parameter_labels=(
                 parameter_labels if parameter_labels is not None else default_labels
@@ -207,12 +209,12 @@ class CosmicStringModelIEos(NumericalTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Gmu: ArrayLike,
-        log_alpha: ArrayLike,
-        q: ArrayLike,
-        logtemp_GeV: ArrayLike,
-        eos: ArrayLike,
+        frequency: jax.Array,
+        log_Gmu: jax.Array,
+        log_alpha: jax.Array,
+        q: jax.Array,
+        logtemp_GeV: jax.Array,
+        eos: jax.Array,
     ) -> jax.Array:
         freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(

@@ -7,7 +7,8 @@ Double-transition broken power law with a fixed 2/3 mid-slope:
 
     \Omega_{\mathrm{GW}} h^2(f) = 10^{\log_{10} A}\,(f/f_0)^{2/3}
         \bigl(1 + (f_{\mathrm{low}}/f)^{\delta}\bigr)^{(\alpha_{\rm low} - 2/3)/\delta}
-        \bigl(1 + (f/f_{\mathrm{high}})^{\delta}\bigr)^{(\alpha_{\rm high} - 2/3)/\delta}
+        \bigl(1 + (f/f_{\mathrm{high}})^{\delta}\bigr)^{(\alpha_{\rm high}
+        - 2/3)/\delta}
 
 with fixed :math:`f_0 = 10^{-3}` Hz, mid-slope 2/3, and :math:`\delta = 2`.
 """
@@ -107,12 +108,12 @@ class ExtragalacticWd2(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        f_low: ArrayLike,
-        f_high: ArrayLike,
-        alpha_low: ArrayLike,
-        alpha_high: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        f_low: jax.Array,
+        f_high: jax.Array,
+        alpha_low: jax.Array,
+        alpha_high: jax.Array,
     ) -> jax.Array:
         fvec = jnp.asarray(frequency)
         L = 1.0 + (f_low / fvec) ** self.delta
@@ -131,7 +132,8 @@ class ExtragalacticWd2(AnalyticTemplate):
         frequency: ArrayLike,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian; columns [log_amplitude, f_low, f_high, alpha_low, alpha_high]."""
+        """Analytic Jacobian;
+        columns [log_amplitude, f_low, f_high, alpha_low, alpha_high]."""
         log_amplitude, f_low, f_high, alpha_low, alpha_high = (
             theta[0],
             theta[1],
@@ -147,7 +149,11 @@ class ExtragalacticWd2(AnalyticTemplate):
         )
         d_logA = model * jnp.log(10.0)
         d_flow = (
-            model * (alpha_low - self.mid_slope) / f_low * (f_low / fvec) ** self.delta / L
+            model
+            * (alpha_low - self.mid_slope)
+            / f_low
+            * (f_low / fvec) ** self.delta
+            / L
         )
         d_fhigh = (
             model
@@ -158,9 +164,7 @@ class ExtragalacticWd2(AnalyticTemplate):
         )
         d_alpha_low = model * (1.0 / self.delta) * jnp.log(L)
         d_alpha_high = model * (1.0 / self.delta) * jnp.log(H)
-        return jnp.stack(
-            [d_logA, d_flow, d_fhigh, d_alpha_low, d_alpha_high], axis=-1
-        )
+        return jnp.stack([d_logA, d_flow, d_fhigh, d_alpha_low, d_alpha_high], axis=-1)
 
 
 class ExtragalacticWd2A(AnalyticTemplate):
@@ -229,8 +233,8 @@ class ExtragalacticWd2A(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
     ) -> jax.Array:
         fvec = jnp.asarray(frequency)
         L = 1.0 + (self.f_low / fvec) ** self.delta
@@ -246,7 +250,7 @@ class ExtragalacticWd2A(AnalyticTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian; single column d/d(log_amplitude)."""

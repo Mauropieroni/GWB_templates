@@ -95,10 +95,10 @@ class PtTurbulence(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Omega_s: ArrayLike,
-        log_R_H_star: ArrayLike,
-        log_T_star: ArrayLike,
+        frequency: jax.Array,
+        log_Omega_s: jax.Array,
+        log_R_H_star: jax.Array,
+        log_T_star: jax.Array,
     ) -> jax.Array:
         r"""Evaluate the MHD-turbulence FOPT spectrum at ``frequency``."""
         Omega_s = 10.0**log_Omega_s
@@ -116,10 +116,10 @@ class PtTurbulence(AnalyticTemplate):
         r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
 
         n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
-        norm = (
-            r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        prefactor = (
+            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
         )
-        prefactor = 3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
         h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
 
         return double_broken_power_law(
@@ -163,9 +163,7 @@ class PtTurbulence(AnalyticTemplate):
         r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
 
         n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
-        norm = (
-            r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
-        )
+        norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
         prefactor = (
             3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
         )
