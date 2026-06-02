@@ -104,7 +104,8 @@ class LognormalBump(AnalyticTemplate):
 
         - :math:`\partial/\partial(\log_{10}A) = \text{model}\cdot\ln 10`
         - :math:`\partial/\partial(\log_{10}f_*) = \text{model}\cdot u/\sigma^2`
-        - :math:`\partial/\partial(\log_{10}\sigma) = \text{model}\cdot u^2 \ln 10/\sigma^2`
+        - :math:`\partial/\partial(\log_{10}\sigma)
+        = \text{model}\cdot u^2 \ln 10/\sigma^2`
         """
         log_amplitude, log_pivot, log_width = theta
         pivot = 10.0**log_pivot

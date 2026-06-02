@@ -107,7 +107,7 @@ def g_star_entropy(T: float | jax.Array) -> jax.Array:
     )
 
 
-def a_hubble(T: float | jax.Array) -> jax.Array:
+def a_hubble(T: float | jax.Array) -> float | jax.Array:
     """
     Hubble rate at the transition temperature, redshifted to today (in Hz).
 
@@ -238,11 +238,7 @@ def broken_power_law_a1(
     with :math:`x = f / f_b`.
     """
     x = freq / 10.0**log_f_b
-    return (
-        10.0**log_amplitude
-        * x**n_1
-        * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
-    )
+    return 10.0**log_amplitude * x**n_1 * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
 
 
 def jac_double_broken_power_law_amp_freqs(
@@ -277,13 +273,9 @@ def jac_double_broken_power_law_amp_freqs(
     r12a1 = r_12**a_1
 
     d_logA = model * ln10
-    d_logf1 = (
-        model * ln10 * (n_1 - n_2) * (x2a1 - 1.0) / ((1.0 + r12a1) * (1.0 + x1a1))
-    )
+    d_logf1 = model * ln10 * (n_1 - n_2) * (x2a1 - 1.0) / ((1.0 + r12a1) * (1.0 + x1a1))
     num_f2 = (
-        -n_1 * r12a1
-        - (n_3 + (n_1 + n_3) * r12a1) * x2a2
-        + n_2 * (r12a1 * x2a2 - 1.0)
+        -n_1 * r12a1 - (n_3 + (n_1 + n_3) * r12a1) * x2a2 + n_2 * (r12a1 * x2a2 - 1.0)
     )
     d_logf2 = model * ln10 * num_f2 / ((1.0 + r12a1) * (1.0 + x2a2))
 

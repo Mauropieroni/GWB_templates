@@ -16,15 +16,12 @@ used as a baseline in stochastic-background searches.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class PowerLaw(AnalyticTemplate):
@@ -99,9 +96,9 @@ class PowerLaw(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        tilt: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        tilt: jax.Array,
     ) -> jax.Array:
         r"""
         Evaluate the power-law spectrum at ``frequency``.
@@ -127,7 +124,8 @@ class PowerLaw(AnalyticTemplate):
         Analytic Jacobian of the power-law spectrum.
 
         :math:`\partial/\partial(\log_{10}A) = \text{model} \cdot \ln 10`,
-        :math:`\partial/\partial(\text{tilt}) = \text{model} \cdot \ln(f/f_{\rm pivot})`.
+        :math:`\partial/\partial(\text{tilt})
+        = \text{model} \cdot \ln(f/f_{\rm pivot})`.
         """
         log_amplitude, tilt = theta
         model = self.omega_gw_h2(frequency, log_amplitude, tilt)

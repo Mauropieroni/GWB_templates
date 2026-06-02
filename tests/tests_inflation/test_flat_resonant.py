@@ -1,7 +1,6 @@
 import os
 import unittest
 
-import jax
 import jax.numpy as jnp
 
 from gwb_templates import constants as c
@@ -42,7 +41,7 @@ class TestFlatResonantTemplate(unittest.TestCase):
         grad = model_lin.grad_theta_omega_gw_h2(fvec, PARS_LIN)
         self.assertEqual(grad.shape, (N_FREQ, len(PARS_LIN)))
 
-    def test_gradient_vs_jacfwd(self):
+    def test_gradient_vs_jacfwd_linear(self):
         grad = model_lin.grad_theta_omega_gw_h2(fvec, PARS_LIN)
 
         grad_fwd = gradient_autodiff(
@@ -61,7 +60,7 @@ class TestFlatResonantTemplate(unittest.TestCase):
         grad = model_log.grad_theta_omega_gw_h2(fvec, PARS_LOG)
         self.assertEqual(grad.shape, (N_FREQ, len(PARS_LOG)))
 
-    def test_gradient_vs_jacfwd(self):
+    def test_gradient_vs_jacfwd_log(self):
         grad = model_log.grad_theta_omega_gw_h2(fvec, PARS_LOG)
 
         grad_fwd = gradient_autodiff(

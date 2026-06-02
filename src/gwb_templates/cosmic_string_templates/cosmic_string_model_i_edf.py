@@ -241,7 +241,9 @@ class CosmicStringModelIEdf(NumericalTemplate):
         super().__init__(
             model_name=model_name,
             model_label=(
-                model_label if model_label is not None else "Cosmic String Model I (EDF)"
+                model_label
+                if model_label is not None
+                else "Cosmic String Model I (EDF)"
             ),
             parameter_labels=(
                 parameter_labels if parameter_labels is not None else default_labels
@@ -253,12 +255,12 @@ class CosmicStringModelIEdf(NumericalTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Gmu: ArrayLike,
-        log_alpha: ArrayLike,
-        q: ArrayLike,
-        log_T_Extra: ArrayLike,
-        Dg_Extra: ArrayLike,
+        frequency: jax.Array,
+        log_Gmu: jax.Array,
+        log_alpha: jax.Array,
+        q: jax.Array,
+        log_T_Extra: jax.Array,
+        Dg_Extra: jax.Array,
     ) -> jax.Array:
         freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(
