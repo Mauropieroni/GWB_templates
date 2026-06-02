@@ -43,14 +43,14 @@ class TestExtragalacticSobbhBnsATemplate(unittest.TestCase):
 
     def test_power_law_index(self):
         """Spectral index should be exactly 2/3."""
-        out = model.omega_gw_h2(fvec, PARS)
+        out = model.omega_gw_h2(fvec, *PARS)
         ratio_spectrum = float(out[1] / out[0])
         ratio_expected = float((fvec[1] / fvec[0]) ** (2.0 / 3.0))
         self.assertAlmostEqual(ratio_spectrum, ratio_expected, places=10)
 
     def test_consistent_with_full_model(self):
         """Amplitude-only model must match the full model at the same amplitude."""
-        out_A = model.omega_gw_h2(fvec, PARS)
+        out_A = model.omega_gw_h2(fvec, *PARS)
         out_full = model_full.omega_gw_h2(fvec, *PARS_FULL)
         self.assertAlmostEqual(
             jnp.max(jnp.abs(out_A - out_full)).item(), 0.0, places=10

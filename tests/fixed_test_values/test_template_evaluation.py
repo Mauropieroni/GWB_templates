@@ -45,7 +45,7 @@ def _make_test(name: str, fixture_path: pathlib.Path):
 
     def test_method(self: "TestTemplateEvaluation") -> None:
         data = np.load(str(fixture_path))
-        fvec = jnp.array(data["fvec"]) if use_numpy else jnp.array(data["fvec"])
+        fvec = jnp.array(data["fvec"])
         pars_all = data["pars"]  # (N_SAMPLES, N_PARAMS)
         outputs_all = data["outputs"]  # (N_SAMPLES, N_FREQ)
         model = get_template_from_registry(name)
