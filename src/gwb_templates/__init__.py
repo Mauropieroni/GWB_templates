@@ -19,7 +19,9 @@ from gwb_templates.template import (
 from gwb_templates.generic_templates import amplitude  # noqa: F401
 from gwb_templates.generic_templates import broken_power_law  # noqa: F401
 from gwb_templates.generic_templates import broken_power_law_a1  # noqa: F401
-from gwb_templates.generic_templates import broken_power_law_fixed_smoothness  # noqa: F401
+from gwb_templates.generic_templates import (  # noqa: F401
+    broken_power_law_fixed_smoothness,
+)
 from gwb_templates.generic_templates import double_broken_power_law  # noqa: F401
 from gwb_templates.generic_templates import double_broken_power_law_rf  # noqa: F401
 from gwb_templates.generic_templates import lognormal_bump  # noqa: F401
@@ -53,8 +55,10 @@ from gwb_templates.astrophysical_templates import galactic_binaries_old  # noqa:
 
 # ── Cosmic strings ────────────────────────────────────────────────────────────
 from gwb_templates.cosmic_string_templates import cosmic_string_model_i  # noqa: F401
-from gwb_templates.cosmic_string_templates import cosmic_string_model_i_edf  # noqa: F401
-from gwb_templates.cosmic_string_templates import cosmic_string_model_i_eos  # noqa: F401
+from gwb_templates.cosmic_string_templates import (  # noqa: F401
+    cosmic_string_model_i_edf,
+    cosmic_string_model_i_eos,
+)
 from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa: F401
 
 __all__ = [
