@@ -1,7 +1,20 @@
 """
 JAX-compatible helper functions for phase transition GW templates.
 
-All functions are differentiable via ``jax.jacfwd``.
+Pure-function helpers shared by the FOPT template classes:
+
+* Effective relativistic d.o.f. tables (``g_star_energy``,
+  ``g_star_entropy``) and the cosmological redshift factors derived from
+  them (``a_hubble``, ``redshift_omega``).
+* The sound-wave source-duration helper ``h_star_tau``.
+* Inline spectral shapes (``double_broken_power_law``,
+  ``broken_power_law_a1``) that the PT templates compose with their
+  physics-level prefactors. These are kept here rather than imported from
+  ``generic_templates`` so the PT classes remain robust to refactors of
+  the generic-template layer.
+
+All functions are pure JAX and differentiable via ``jax.jacfwd`` /
+``jax.grad``.
 """
 
 import jax
@@ -94,7 +107,7 @@ def g_star_entropy(T: float | jax.Array) -> jax.Array:
     )
 
 
-def a_hubble(T: float | jax.Array) -> jax.Array:
+def a_hubble(T: float | jax.Array) -> float | jax.Array:
     """
     Hubble rate at the transition temperature, redshifted to today (in Hz).
 
@@ -148,3 +161,148 @@ def h_star_tau(K: float | jax.Array, R_H_star: float | jax.Array) -> jax.Array:
         Hubble rate times sound wave source duration.
     """
     return jnp.minimum(1.0, R_H_star / jnp.sqrt(0.75 * K))
+
+
+def double_broken_power_law(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_1: jax.Array,
+    log_f_2: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    n_3: float | jax.Array,
+    a_1: float | jax.Array,
+    a_2: float | jax.Array,
+) -> jax.Array:
+    r"""
+    Double broken power-law spectrum, normalised so that
+    ``Omega(f_2) = 10**log_amplitude``.
+
+    .. math::
+
+        \Omega(f) = N\,A\,(f/f_1)^{n_1}\,
+            \bigl(1 + (f/f_1)^{a_1}\bigr)^{(n_2 - n_1)/a_1}\,
+            \bigl(1 + (f/f_2)^{a_2}\bigr)^{(n_3 - n_2)/a_2}
+
+    with the normalisation
+
+    .. math::
+
+        N = (f_1/f_2)^{n_1}\,
+            \bigl(1 + (f_1/f_2)^{-a_1}\bigr)^{(n_1 - n_2)/a_1}\,
+            2^{(n_2 - n_3)/a_2}.
+
+    Args:
+        freq: Frequency grid (Hz).
+        log_amplitude: log10 amplitude at f_2.
+        log_f_1, log_f_2: log10 of the two break frequencies (Hz).
+        n_1, n_2, n_3: Spectral indices in the three regimes.
+        a_1, a_2: Transition smoothness parameters.
+    """
+    amplitude = 10.0**log_amplitude
+    ratio = 10.0 ** (log_f_1 - log_f_2)  # f_1 / f_2
+    x_1 = freq / 10.0**log_f_1
+    x_2 = freq / 10.0**log_f_2
+
+    norm = (
+        ratio**n_1
+        * (1.0 + ratio ** (-a_1)) ** ((n_1 - n_2) / a_1)
+        * 2.0 ** ((n_2 - n_3) / a_2)
+    )
+
+    return (
+        norm
+        * amplitude
+        * x_1**n_1
+        * (1.0 + x_1**a_1) ** ((n_2 - n_1) / a_1)
+        * (1.0 + x_2**a_2) ** ((n_3 - n_2) / a_2)
+    )
+
+
+def broken_power_law_a1(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_b: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    a_1: float | jax.Array,
+) -> jax.Array:
+    r"""
+    Broken power law with direct smoothness parameter ``a_1``.
+
+    .. math::
+
+        \Omega(f) = 10^{\alpha}\,x^{n_1}\,
+            \bigl(\tfrac{1}{2} + \tfrac{1}{2} x^{a_1}\bigr)^{(n_2 - n_1)/a_1}
+
+    with :math:`x = f / f_b`.
+    """
+    x = freq / 10.0**log_f_b
+    return 10.0**log_amplitude * x**n_1 * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
+
+
+def jac_double_broken_power_law_amp_freqs(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_1: jax.Array,
+    log_f_2: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    n_3: float | jax.Array,
+    a_1: float | jax.Array,
+    a_2: float | jax.Array,
+) -> jax.Array:
+    """
+    Analytic partials of :func:`double_broken_power_law` w.r.t. the three
+    "outer" arguments ``(log_amplitude, log_f_1, log_f_2)``.
+
+    Returns:
+        jax.Array of shape ``freq.shape + (3,)``.
+    """
+    x_1 = freq / 10.0**log_f_1
+    x_2 = freq / 10.0**log_f_2
+    r_12 = 10.0 ** (log_f_1 - log_f_2)
+    ln10 = jnp.log(10.0)
+    model = double_broken_power_law(
+        freq, log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2
+    )
+
+    x1a1 = x_1**a_1
+    x2a1 = x_2**a_1
+    x2a2 = x_2**a_2
+    r12a1 = r_12**a_1
+
+    d_logA = model * ln10
+    d_logf1 = model * ln10 * (n_1 - n_2) * (x2a1 - 1.0) / ((1.0 + r12a1) * (1.0 + x1a1))
+    num_f2 = (
+        -n_1 * r12a1 - (n_3 + (n_1 + n_3) * r12a1) * x2a2 + n_2 * (r12a1 * x2a2 - 1.0)
+    )
+    d_logf2 = model * ln10 * num_f2 / ((1.0 + r12a1) * (1.0 + x2a2))
+
+    return jnp.stack([d_logA, d_logf1, d_logf2], axis=-1)
+
+
+def jac_broken_power_law_a1_amp_freq(
+    freq: jax.Array,
+    log_amplitude: jax.Array,
+    log_f_b: jax.Array,
+    n_1: float | jax.Array,
+    n_2: float | jax.Array,
+    a_1: float | jax.Array,
+) -> jax.Array:
+    """
+    Analytic partials of :func:`broken_power_law_a1` w.r.t. the two "outer"
+    arguments ``(log_amplitude, log_f_b)``.
+
+    Returns:
+        jax.Array of shape ``freq.shape + (2,)``.
+    """
+    x = freq / 10.0**log_f_b
+    xa = x**a_1
+    ln10 = jnp.log(10.0)
+    model = broken_power_law_a1(freq, log_amplitude, log_f_b, n_1, n_2, a_1)
+
+    d_logA = model * ln10
+    d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
+
+    return jnp.stack([d_logA, d_logfb], axis=-1)

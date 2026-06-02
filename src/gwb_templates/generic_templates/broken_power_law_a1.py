@@ -1,118 +1,149 @@
+r"""
+Broken power-law with direct smoothness parameter ``a_1`` (5 parameters).
+
+Used as the base spectral template for bubble-collision GW spectra. The
+smoothness ``a_1`` is a direct (non-log) parameter for transparent
+physical interpretation:
+
+.. math::
+
+    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha}\,
+        x^{n_1}\,
+        \left(\tfrac{1}{2} + \tfrac{1}{2} x^{a_1}\right)^{(n_2 - n_1)/a_1}
+
+with :math:`x = f / f_b`.
+
+Reference: arXiv:2403.03723.
 """
-Broken power-law with direct smoothness parameter a_1 (5 parameters).
 
-Used as the base spectral template for bubble-collision GW spectra.  The
-smoothness a_1 is a direct (non-log) parameter for transparent physical
-interpretation:
+from __future__ import annotations
 
-    Omega(f) = A * x^n_1 * (0.5 + 0.5 * x^a_1)^((n_2 - n_1) / a_1)
-
-where x = f / f_b.
-
-Reference: arXiv:2403.03723 (GW from FOPT in LISA: reconstruction pipeline
-and physics interpretation).
-"""
-
-from collections.abc import Sequence
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
 
-from gwb_templates import utils as ut
+from gwb_templates.template import AnalyticTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
-
-jax.config.update("jax_enable_x64", True)
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-def broken_power_law_a1(freq: ArrayLike, pars: ParamLike) -> jax.Array:
+class BrokenPowerLawA1(AnalyticTemplate):
+    r"""
+    Broken power law with a direct smoothness parameter ``a_1`` (5 parameters).
+
+    Free parameters
+    ---------------
+    log_amplitude
+        :math:`\log_{10}` amplitude at the break frequency.
+    log_f_b
+        :math:`\log_{10}` of the break frequency in Hz.
+    n_1
+        Low-frequency spectral index.
+    n_2
+        High-frequency spectral index.
+    a_1
+        Transition smoothness.
     """
-    Broken power law with a direct smoothness parameter a_1 (5 parameters).
 
-    Omega(f) = A * x^n_1 * (0.5 + 0.5 * x^a_1)^((n_2 - n_1) / a_1)
-    where x = f / f_b.
+    #: TODO: cite
+    bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude, log10 f_b, n_1, n_2, a_1].
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_amplitude, log_f_b, n_1, n_2, a_1 = (
-        pars[0],
-        pars[1],
-        pars[2],
-        pars[3],
-        pars[4],
-    )
-    x = freq / 10.0**log_f_b
-    return 10.0**log_amplitude * x**n_1 * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        default_labels = {
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+            "log_f_b": r"$\log_{10}(f_b/\mathrm{Hz})$",
+            "n_1": r"$n_1$",
+            "n_2": r"$n_2$",
+            "a_1": r"$a_1$",
+        }
+        default_priors = {
+            "log_amplitude": {
+                "prior_type": "uniform",
+                "minimum": -20.0,
+                "maximum": -1.0,
+            },
+            "log_f_b": {
+                "prior_type": "uniform",
+                "minimum": -10.0,
+                "maximum": 0.0,
+            },
+            "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+            "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+            "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+        }
 
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label
+                if model_label is not None
+                else "Broken Power Law (a1)"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
-def d1broken_power_law_a1(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``broken_power_law_a1`` w.r.t. pars.
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_amplitude: ArrayLike,
+        log_f_b: ArrayLike,
+        n_1: ArrayLike,
+        n_2: ArrayLike,
+        a_1: ArrayLike,
+    ) -> jax.Array:
+        r"""
+        Evaluate the ``a_1``-parametrised broken power law at ``frequency``.
+        """
+        x = frequency / 10.0**log_f_b
+        return (
+            10.0**log_amplitude
+            * x**n_1
+            * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
+        )
 
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude, log10 f_b, n_1, n_2, a_1].
-    Returns:
-        jax.Array of shape (N_freq, 5):
-            d/d(log_A)  = model * ln(10)
-            d/d(log_fb) = model * ln(10) * (-n_1 - n_2*x^a_1) / (1 + x^a_1)
-            d/d(n_1)    = model * [ln(x) - ln(0.5*(1+x^a_1)) / a_1]
-            d/d(n_2)    = model * ln(0.5*(1+x^a_1)) / a_1
-            d/d(a_1)    = model * (n_2-n_1)/a_1^2 / (1+x^a_1)
-                          * [a_1*x^a_1*ln(x) - (1+x^a_1)*ln(0.5*(1+x^a_1))]
-    """
-    log_f_b, n_1, n_2, a_1 = pars[1], pars[2], pars[3], pars[4]
-    x = freq / 10.0**log_f_b
-    xa = x**a_1
-    ln10 = jnp.log(10.0)
-    log_half_1_xa = jnp.log(0.5 * (1.0 + xa))
-    model = broken_power_law_a1(freq, pars)
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the ``a_1``-parametrised broken power law.
 
-    d_logA = model * ln10
-    d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
-    d_n1 = model * (jnp.log(x) - log_half_1_xa / a_1)
-    d_n2 = model * log_half_1_xa / a_1
-    d_a1 = (
-        model
-        * (n_2 - n_1)
-        / a_1**2
-        / (1.0 + xa)
-        * (a_1 * xa * jnp.log(x) - (1.0 + xa) * log_half_1_xa)
-    )
+        Closed-form derivatives w.r.t. ``(log_amplitude, log_f_b, n_1,
+        n_2, a_1)``; see module docstring for the spectral shape.
+        """
+        log_amplitude, log_f_b, n_1, n_2, a_1 = theta
+        x = frequency / 10.0**log_f_b
+        xa = x**a_1
+        ln10 = jnp.log(10.0)
+        log_half_1_xa = jnp.log(0.5 * (1.0 + xa))
+        model = self.omega_gw_h2(frequency, log_amplitude, log_f_b, n_1, n_2, a_1)
 
-    return jnp.stack([d_logA, d_logfb, d_n1, d_n2, d_a1], axis=1)
+        d_logA = model * ln10
+        d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
+        d_n1 = model * (jnp.log(x) - log_half_1_xa / a_1)
+        d_n2 = model * log_half_1_xa / a_1
+        d_a1 = (
+            model
+            * (n_2 - n_1)
+            / a_1**2
+            / (1.0 + xa)
+            * (a_1 * xa * jnp.log(x) - (1.0 + xa) * log_half_1_xa)
+        )
 
-
-broken_power_law_a1_model = ut.Signal_model(
-    "broken_power_law_a1",
-    broken_power_law_a1,
-    dtemplate=d1broken_power_law_a1,
-    model_label="Broken Power Law (a1)",
-    parameter_names=[
-        "log_amplitude",
-        "log_f_b",
-        "n_1",
-        "n_2",
-        "a_1",
-    ],
-    parameter_labels=[
-        r"$\log_{10}(h^2\,\Omega_*)$",
-        r"$\log_{10}(f_b/\mathrm{Hz})$",
-        r"$n_1$",
-        r"$n_2$",
-        r"$a_1$",
-    ],
-    prior={
-        "log_amplitude": {"prior_type": "uniform", "minimum": -20.0, "maximum": -1.0},
-        "log_f_b": {"prior_type": "uniform", "minimum": -10.0, "maximum": 0.0},
-        "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-        "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-        "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-    },
-)
+        return jnp.stack([d_logA, d_logfb, d_n1, d_n2, d_a1], axis=-1)

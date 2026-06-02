@@ -1,180 +1,201 @@
-from collections.abc import Sequence
+r"""
+MHD-turbulence contribution to the GW spectrum from a cosmological
+first-order phase transition.
+
+Based on:
+
+A. Roper Pol, C. Caprini, A. Neronov, and D. Semikoz,
+"Gravitational wave signal from primordial magnetic fields in the
+Pulsar Timing Array frequency band",
+Phys.Rev.D 105 (2022) 12; [arXiv:2201.05630 [astro-ph.CO]].
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
 
-from gwb_templates import utils as ut
-from gwb_templates.generic_templates.double_broken_power_law import (
+from gwb_templates.FOPT_templates.pt_base import (
+    a_hubble,
     double_broken_power_law,
-    d1double_broken_power_law,
+    jac_double_broken_power_law_amp_freqs,
+    redshift_omega,
 )
-from gwb_templates.FOPT_templates.pt_base import a_hubble, redshift_omega
+from gwb_templates.template import AnalyticTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
-
-jax.config.update("jax_enable_x64", True)
-
-# Spectral parameters from Roper Pol et al. 2022 [arXiv:2201.05630]
-_A_AMP = 0.085
-_N_EDDY = 2.0
-_EXPONENTS = (3.0, 1.0, -8.0, 4.0, 2.15)  # n_1, n_2, n_3, a_1, a_2
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-def pt_turbulence(freq: ArrayLike, pars: ParamLike) -> jax.Array:
+class PtTurbulence(AnalyticTemplate):
+    r"""
+    MHD-turbulence GW spectrum from a cosmological FOPT.
+
+    Free parameters
+    ---------------
+    log_Omega_s
+        :math:`\log_{10}` of the fractional energy density in the
+        turbulent source.
+    log_R_H_star
+        :math:`\log_{10}` of the bubble size times the Hubble rate.
+    log_T_star
+        :math:`\log_{10}` of the transition temperature in GeV.
     """
-    MHD turbulence contribution to the GW spectrum from a cosmological
-    first-order phase transition (3 parameters).
 
-    Based on:
-    A. Roper Pol, C. Caprini, A. Neronov, and D. Semikoz,
-    "Gravitational wave signal from primordial magnetic fields in the
-    Pulsar Timing Array frequency band",
-    Phys.Rev.D 105 (2022) 12; [arXiv:2201.05630 [astro-ph.CO]].
-
-    Args:
-        freq: Frequency grid.
-        pars: [log10 Omega_s, log10 R_H_star, log10 T_star/GeV].
-              Omega_s  -- fractional energy density in the turbulent source
-              R_H_star -- bubble size times the Hubble rate
-              T_star   -- transition temperature in GeV
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_Omega_s, log_R_H_star, log_T_star = (
-        pars[0],
-        pars[1],
-        pars[2],
+    #: Spectral amplitude prefactor (Roper Pol et al. 2022).
+    AMPLITUDE_PREFACTOR: ClassVar[float] = 0.085
+    #: Eddy-turnover scaling N_eddy.
+    N_EDDY: ClassVar[float] = 2.0
+    #: Fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
+    SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
+        3.0,
+        1.0,
+        -8.0,
+        4.0,
+        2.15,
     )
 
-    Omega_s = 10.0**log_Omega_s
-    R_H_star = 10.0**log_R_H_star
-    T_star = 10.0**log_T_star
+    # TODO: cite (arXiv:2201.05630)
+    bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
-    # Alfven speed
-    vA = jnp.sqrt(0.75 * Omega_s)
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        default_labels = {
+            "log_Omega_s": r"$\log_{10}\Omega_s$",
+            "log_R_H_star": r"$\log_{10}(R_* H_*)$",
+            "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
+        }
+        default_priors = {
+            "log_Omega_s": {"min": -6.0, "max": 0.0},
+            "log_R_H_star": {"min": -3.0, "max": 0.0},
+            "log_T_star": {"min": -2.0, "max": 4.0},
+        }
 
-    # Hubble rate at production redshifted to today
-    aH_star = a_hubble(T_star)
-    # Redshift factor for the amplitude
-    h2FGW0 = redshift_omega(T_star)
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label if model_label is not None else "PT MHD Turbulence"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
-    # Break frequencies
-    f_1 = vA / _N_EDDY * aH_star / R_H_star
-    f_2 = 2.2 * aH_star / R_H_star
-    r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
+    def omega_gw_h2(
+        self,
+        frequency: jax.Array,
+        log_Omega_s: jax.Array,
+        log_R_H_star: jax.Array,
+        log_T_star: jax.Array,
+    ) -> jax.Array:
+        r"""Evaluate the MHD-turbulence FOPT spectrum at ``frequency``."""
+        Omega_s = 10.0**log_Omega_s
+        R_H_star = 10.0**log_R_H_star
+        T_star = 10.0**log_T_star
 
-    # Normalization factor (matches DBPL value at f_2)
-    n_1, n_2, n_3, a_1, a_2 = _EXPONENTS
-    norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        # Alfven speed
+        vA = jnp.sqrt(0.75 * Omega_s)
 
-    prefactor = 3.0 * _A_AMP * norm / (4.0 * jnp.pi**2 * _N_EDDY)
-    h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
+        aH_star = a_hubble(T_star)
+        h2FGW0 = redshift_omega(T_star)
 
-    return double_broken_power_law(
-        freq,
-        jnp.array(
+        f_1 = vA / self.N_EDDY * aH_star / R_H_star
+        f_2 = 2.2 * aH_star / R_H_star
+        r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
+
+        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        prefactor = (
+            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
+        )
+        h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
+
+        return double_broken_power_law(
+            frequency,
+            jnp.log10(h2Omega2),
+            jnp.log10(f_1),
+            jnp.log10(f_2),
+            n_1,
+            n_2,
+            n_3,
+            a_1,
+            a_2,
+        )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the MHD-turbulence FOPT spectrum w.r.t.
+        ``(log_Omega_s, log_R_H_star, log_T_star)``.
+
+        Uses the chain rule through :func:`double_broken_power_law`.  The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives
+        vanish almost everywhere (consistent with autodiff through
+        :func:`jnp.select`).
+        """
+        log_Omega_s, log_R_H_star, log_T_star = theta[0], theta[1], theta[2]
+
+        Omega_s = 10.0**log_Omega_s
+        R_H_star = 10.0**log_R_H_star
+        T_star = 10.0**log_T_star
+
+        vA = jnp.sqrt(0.75 * Omega_s)
+        aH_star = a_hubble(T_star)
+        h2FGW0 = redshift_omega(T_star)
+
+        f_1 = vA / self.N_EDDY * aH_star / R_H_star
+        f_2 = 2.2 * aH_star / R_H_star
+        r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
+
+        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
+        prefactor = (
+            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
+        )
+        h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
+
+        J_inner = jac_double_broken_power_law_amp_freqs(
+            frequency,
+            jnp.log10(h2Omega2),
+            jnp.log10(f_1),
+            jnp.log10(f_2),
+            n_1,
+            n_2,
+            n_3,
+            a_1,
+            a_2,
+        )  # shape (..., 3)
+
+        # h2Omega2 ∝ norm(r_f) * vA * Omega_s^2 * R^2,  r_f ∝ Omega_s^{-1/2}
+        # d log_h2Omega2/d log_Omega_s = 1 + r_f^{a_1}/(1 + r_f^{a_1})
+        # d log_h2Omega2/d log_R_H_star = 2
+        # d log_h2Omega2/d log_T_star = 0
+        # f_1 ∝ vA * aH_star / R,  vA ∝ Omega_s^{1/2},  aH_star ∝ T
+        # f_2 ∝ aH_star / R
+        rf_a1 = r_f**a_1
+        d_logOmega2_d_logOs = 1.0 + rf_a1 / (1.0 + rf_a1)
+
+        dq_dp = jnp.array(
             [
-                jnp.log10(h2Omega2),
-                jnp.log10(f_1),
-                jnp.log10(f_2),
-                n_1,
-                n_2,
-                n_3,
-                a_1,
-                a_2,
+                [d_logOmega2_d_logOs, 2.0, 0.0],  # log_h2Omega2
+                [0.5, -1.0, 1.0],  # log_f_1
+                [0.0, -1.0, 1.0],  # log_f_2
             ]
-        ),
-    )
+        )
 
-
-def d1pt_turbulence(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``pt_turbulence`` w.r.t. pars.
-
-    Uses the chain rule through ``double_broken_power_law``.  The g_star
-    functions are piecewise-constant, so their T-derivatives are zero almost
-    everywhere (consistent with JAX autodiff through ``jnp.select``).
-
-    Args:
-        freq: Frequency grid.
-        pars: [log10 Omega_s, log10 R_H_star, log10 T_star/GeV].
-    Returns:
-        jax.Array of shape (N_freq, 3).
-    """
-    log_Omega_s, log_R_H_star, log_T_star = pars[0], pars[1], pars[2]
-
-    Omega_s = 10.0**log_Omega_s
-    R_H_star = 10.0**log_R_H_star
-    T_star = 10.0**log_T_star
-
-    vA = jnp.sqrt(0.75 * Omega_s)
-    aH_star = a_hubble(T_star)
-    h2FGW0 = redshift_omega(T_star)
-
-    f_1 = vA / _N_EDDY * aH_star / R_H_star
-    f_2 = 2.2 * aH_star / R_H_star
-    r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
-
-    n_1, n_2, n_3, a_1, a_2 = _EXPONENTS
-    norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
-    prefactor = 3.0 * _A_AMP * norm / (4.0 * jnp.pi**2 * _N_EDDY)
-    h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
-
-    inner_pars = jnp.array(
-        [jnp.log10(h2Omega2), jnp.log10(f_1), jnp.log10(f_2), n_1, n_2, n_3, a_1, a_2]
-    )
-    J_inner = d1double_broken_power_law(freq, inner_pars)  # (N_freq, 8)
-
-    # d([log_h2Omega2, log_f_1, log_f_2]) / d([log_Omega_s, log_R_H_star, log_T_star])
-    #
-    # h2Omega2 ∝ norm(r_f) * vA * Omega_s^2 * R_H_star^2,  r_f = C/vA ∝ Omega_s^{-0.5}
-    # d(log_h2Omega2)/d(log_Omega_s) = 1 + r_f^{a_1} / (1 + r_f^{a_1})
-    # d(log_h2Omega2)/d(log_R_H_star) = 2   (∝ R_H_star^2)
-    # d(log_h2Omega2)/d(log_T_star)   = 0   (h2FGW0 piecewise-constant in T)
-    #
-    # f_1 ∝ vA * aH_star / R_H_star,  vA ∝ Omega_s^0.5,  aH_star ∝ T
-    # d(log_f_1)/d(log_Omega_s)   = 0.5
-    # d(log_f_1)/d(log_R_H_star)  = -1
-    # d(log_f_1)/d(log_T_star)    = 1
-    #
-    # f_2 ∝ aH_star / R_H_star  (no Omega_s)
-    # d(log_f_2)/d(log_Omega_s)   = 0
-    # d(log_f_2)/d(log_R_H_star)  = -1
-    # d(log_f_2)/d(log_T_star)    = 1
-    rf_a1 = r_f**a_1
-    d_logOmega2_d_logOs = 1.0 + rf_a1 / (1.0 + rf_a1)
-
-    dq_dp = jnp.array(
-        [
-            [d_logOmega2_d_logOs, 2.0, 0.0],  # log_h2Omega2
-            [0.5, -1.0, 1.0],  # log_f_1
-            [0.0, -1.0, 1.0],  # log_f_2
-        ]
-    )
-
-    return J_inner[:, :3] @ dq_dp
-
-
-pt_turbulence_model = ut.Signal_model(
-    "pt_turbulence",
-    pt_turbulence,
-    dtemplate=d1pt_turbulence,
-    model_label="PT MHD Turbulence",
-    parameter_names=[
-        "log_Omega_s",
-        "log_R_H_star",
-        "log_T_star",
-    ],
-    parameter_labels=[
-        r"$\log_{10}\Omega_s$",
-        r"$\log_{10}(R_* H_*)$",
-        r"$\log_{10}(T_*/\mathrm{GeV})$",
-    ],
-    prior={
-        "log_Omega_s": {"prior_type": "uniform", "minimum": -6.0, "maximum": 0.0},
-        "log_R_H_star": {"prior_type": "uniform", "minimum": -3.0, "maximum": 0.0},
-        "log_T_star": {"prior_type": "uniform", "minimum": -2.0, "maximum": 4.0},
-    },
-)
+        return J_inner @ dq_dp
