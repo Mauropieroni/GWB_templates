@@ -1,7 +1,6 @@
 **/*.python-version
 **/__pycache__
 **/*.pyc
-**/__init__.py
-**/gwb_templates.egg-info/
+**/*.egg-info/
 **/.vscode/
 **/.DS_Store
