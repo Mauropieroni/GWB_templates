@@ -61,9 +61,38 @@ from gwb_templates.cosmic_string_templates import (  # noqa: F401
 )
 from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa: F401
 
+# ── Scalar-induced GWs via SIGWAY (optional dependency) ───────────────────────
+# SIGWAY is an optional extra (``pip install gwb_templates[sigway]``) and needs
+# a JAX new enough for ``jax.scipy.special.sici``. Import the SIGWAY templates
+# only if the dependency is importable; otherwise ``import gwb_templates`` still
+# works and the SIGWAY templates simply do not register. ``SIGWAY_AVAILABLE``
+# records the outcome.
+SIGWAY_AVAILABLE: bool = False
+try:
+    from gwb_templates.sigway_templates.base import (  # noqa: F401
+        SIGWAYTemplate,
+        sigway_template,
+    )
+    from gwb_templates.sigway_templates import (  # noqa: F401
+        broken_power_law as sigway_broken_power_law,
+        early_matter_domination as sigway_early_matter_domination,
+        lognormal as sigway_lognormal,
+        multifield_oscillations as sigway_multifield_oscillations,
+        single_field_usr as sigway_single_field_usr,
+    )
+
+    SIGWAY_AVAILABLE = True
+except ImportError:
+    # SIGWAY (or a compatible JAX) is not installed: skip the SIGWAY templates.
+    pass
+
 __all__ = [
     "Template",
     "AnalyticTemplate",
     "NumericalTemplate",
     "get_template_from_registry",
+    "SIGWAY_AVAILABLE",
 ]
+
+if SIGWAY_AVAILABLE:
+    __all__ += ["SIGWAYTemplate", "sigway_template"]

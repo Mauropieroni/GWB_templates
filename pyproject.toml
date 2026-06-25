@@ -13,6 +13,9 @@ build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
 dev = ["flake8-black>=0.3.6", "pytest"]
+# SIGWAY-backed scalar-induced GW templates. Needs a JAX new enough for
+# jax.scipy.special.sici (used by SIGWAY's EMD kernel).
+sigway = ["sigway", "jax>=0.8.0", "diffrax", "interpax"]
 
 [tool.setuptools]
 include-package-data = true
@@ -27,6 +30,7 @@ gwb_templates = [
     "FOPT_templates/**/*",
     "cosmic_string_templates/**/*",
     "astrophysical_templates/**/*",
+    "sigway_templates/**/*",
 ]
 
 
