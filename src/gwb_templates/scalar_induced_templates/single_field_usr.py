@@ -105,7 +105,7 @@ class SIGWAYSingleFieldUSR(SIGWAYTemplate):
         phi0: float = 3.0,
         pi0: float = 0.0,
         N_CMB_to_end: float = 58.0,
-        k_solver: Any = None,
+        k_solver: jax.Array = None,
         s: Any = None,
         f: Any = None,
         model_name: str | None = None,
@@ -148,7 +148,7 @@ class SIGWAYSingleFieldUSR(SIGWAYTemplate):
             phi0=self._phi0,
             pi0=self._pi0,
             N_CMB_to_end=self._N_CMB_to_end,
-            k=jnp.asarray(self._k_solver),
+            k=self._k_solver,
         )
         perturbations = SingleFieldPerturbations(solver, ("a", "lam", "v", "nfac"))
         return OmegaGW(

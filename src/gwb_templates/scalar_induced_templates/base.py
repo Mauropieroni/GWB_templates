@@ -189,7 +189,7 @@ class SIGWAYTemplate(Template):
         result is :math:`\Omega_{\mathrm{GW}} h^2` or a dimensionless ratio —
         is set by the kernel passed to :meth:`build_model`.
         """
-        return self._model(jnp.asarray(frequency), *theta)
+        return self._model(frequency, *theta)
 
     # ------------------------------------------------------------------
     # Parameter gradient: use SIGWAY's own Jacobian when available
@@ -213,7 +213,7 @@ class SIGWAYTemplate(Template):
         """
         if self._sigway_jittable:
             theta = self._to_parameter_vector(parameters)
-            return self._model.jacobian(jnp.asarray(frequency), theta)
+            return self._model.jacobian(frequency, theta)
         return super().grad_theta_omega_gw_h2(frequency, parameters, *args, **kwargs)
 
 
