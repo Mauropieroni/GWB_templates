@@ -29,7 +29,7 @@ from sigway.perturbations import AnalyticPerturbations
 from sigway.kernels import RadiationKernel
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.sigway_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
 
 
 def pzeta_broken_power_law(
@@ -46,10 +46,7 @@ def pzeta_broken_power_law(
     return (
         A
         * (alpha + beta) ** gamma
-        / (
-            beta * (k / ks) ** (-alpha / gamma)
-            + alpha * (k / ks) ** (beta / gamma)
-        )
+        / (beta * (k / ks) ** (-alpha / gamma) + alpha * (k / ks) ** (beta / gamma))
         ** gamma
     )
 
@@ -71,9 +68,7 @@ def t_grid_broken_power_law(
     :math:`\min(10^{6/\beta}, 10^4)/(k/k_s)`, capped at :math:`10^5 k_s`.
     """
     ks = 10.0**logks
-    upper = jnp.min(
-        jnp.array([10 ** (6.0 / beta) / (k / ks), 1e4 / (k / ks)]), axis=0
-    )
+    upper = jnp.min(jnp.array([10 ** (6.0 / beta) / (k / ks), 1e4 / (k / ks)]), axis=0)
     upper = jnp.where(upper > 1e5 * ks, 1e5 * ks, upper)
     t1 = jnp.linspace(1e-6 * jnp.ones_like(k), 0.999 * jnp.ones_like(k), 100)
     t2 = jnp.geomspace(jnp.ones_like(upper), upper, 300)
@@ -141,9 +136,7 @@ class SIGWAYBrokenPowerLaw(SIGWAYTemplate):
         super().__init__(
             model_name=model_name,
             model_label=(
-                model_label
-                if model_label is not None
-                else "Broken power law SIGW (RD)"
+                model_label if model_label is not None else "Broken power law SIGW (RD)"
             ),
             parameter_labels=(
                 parameter_labels if parameter_labels is not None else default_labels

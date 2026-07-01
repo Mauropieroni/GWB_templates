@@ -40,7 +40,7 @@ from sigway.kernels import RadiationKernel
 from sigway.ms_solver import SingleFieldSolver
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.sigway_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
 
 
 def usr_potential(
@@ -66,9 +66,7 @@ def usr_t_grid(nlo: int = 200, nhi: int = 800, nf: int = 200) -> jax.Array:
     converged spectrum to sub-percent — it is the *spacing*, not the count,
     that matters.
     """
-    t = jnp.concatenate(
-        [jnp.linspace(1e-5, 0.999, nlo), jnp.geomspace(1.0, 1e3, nhi)]
-    )
+    t = jnp.concatenate([jnp.linspace(1e-5, 0.999, nlo), jnp.geomspace(1.0, 1e3, nhi)])
     return jnp.repeat(jnp.expand_dims(t, axis=-1), nf, axis=-1)
 
 

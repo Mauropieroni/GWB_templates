@@ -30,7 +30,7 @@ gwb_templates = [
     "FOPT_templates/**/*",
     "cosmic_string_templates/**/*",
     "astrophysical_templates/**/*",
-    "sigway_templates/**/*",
+    "scalar_induced_templates/**/*",
 ]
 
 

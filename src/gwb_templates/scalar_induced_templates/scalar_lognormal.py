@@ -26,7 +26,7 @@ from sigway.perturbations import AnalyticPerturbations
 from sigway.kernels import RadiationKernel
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.sigway_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
 
 
 def pzeta_lognormal(
@@ -136,9 +136,7 @@ class SIGWAYLognormal(SIGWAYTemplate):
 
     def build_model(self) -> OmegaGW:
         return OmegaGW(
-            AnalyticPerturbations(
-                pzeta_lognormal, ("logAs", "logDelta", "logks")
-            ),
+            AnalyticPerturbations(pzeta_lognormal, ("logAs", "logDelta", "logks")),
             RadiationKernel(),
             s=self._s,
             t=self._t,

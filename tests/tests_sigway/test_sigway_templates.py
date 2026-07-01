@@ -54,10 +54,11 @@ class TestSigwayOptionalImport(unittest.TestCase):
 
     def test_public_symbols_match_availability(self):
         self.assertEqual(
-            hasattr(gwb_templates, "sigway_template"), SIGWAY_AVAILABLE
+            hasattr(gwb_templates, "scalar_induced_templates"), SIGWAY_AVAILABLE
         )
         self.assertEqual(
-            hasattr(gwb_templates, "SIGWAYTemplate"), SIGWAY_AVAILABLE
+            hasattr(gwb_templates.scalar_induced_templates.base, "SIGWAYTemplate"),
+            SIGWAY_AVAILABLE,
         )
 
 
@@ -94,7 +95,7 @@ class TestSigwayTemplates(unittest.TestCase):
     def test_factory_builds_and_registers(self):
         from sigway.kernels import RadiationKernel
 
-        from gwb_templates import sigway_template
+        from gwb_templates.scalar_induced_templates.base import sigway_template
 
         def pz(k, logAs, logks):
             return 10.0**logAs * jnp.exp(-0.5 * (jnp.log(k / 10**logks) / 0.3) ** 2)
