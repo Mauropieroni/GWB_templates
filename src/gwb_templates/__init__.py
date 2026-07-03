@@ -62,14 +62,6 @@ from gwb_templates.cosmic_string_templates import (  # noqa: F401
 from gwb_templates.cosmic_string_templates import cosmic_string_model_ii
 
 # ── Scalar-induced GWs via SIGWAY (optional dependency) ───────────────────────
-from gwb_templates.scalar_induced_templates import (
-    scalar_broken_power_law,
-    scalar_lognormal,
-    single_field_usr,
-    early_matter_domination,
-    multifield_oscillations,
-)  # noqa: F401
-
 # SIGWAY is an optional extra (``pip install gwb_templates[sigway]``) and needs
 # a JAX new enough for ``jax.scipy.special.sici``. Import the SIGWAY templates
 # only if the dependency is importable; otherwise ``import gwb_templates`` still
@@ -80,6 +72,15 @@ try:
     import sigway
 
     SIGWAY_AVAILABLE = True
+
+    from gwb_templates.scalar_induced_templates import (
+        scalar_broken_power_law,
+        scalar_lognormal,
+        single_field_usr,
+        early_matter_domination,
+        multifield_oscillations,
+    )  # noqa: F401
+
 except ImportError:
 
     # SIGWAY (or a compatible JAX) is not installed: skip the SIGWAY templates.
