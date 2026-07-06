@@ -118,7 +118,7 @@ class ExtragalacticWd2(AnalyticTemplate):
         fvec = jnp.asarray(frequency)
         L = 1.0 + (f_low / fvec) ** self.delta
         H = 1.0 + (fvec / f_high) ** self.delta
-        low_term = L ** ((alpha_low - self.mid_slope) / self.delta)
+        low_term = L ** ((self.mid_slope - alpha_low) / self.delta)
         high_term = H ** ((alpha_high - self.mid_slope) / self.delta)
         return (
             10.0**log_amplitude
@@ -150,7 +150,7 @@ class ExtragalacticWd2(AnalyticTemplate):
         d_logA = model * jnp.log(10.0)
         d_flow = (
             model
-            * (alpha_low - self.mid_slope)
+            * (self.mid_slope - alpha_low)
             / f_low
             * (f_low / fvec) ** self.delta
             / L
@@ -162,7 +162,7 @@ class ExtragalacticWd2(AnalyticTemplate):
             * (fvec / f_high) ** self.delta
             / H
         )
-        d_alpha_low = model * (1.0 / self.delta) * jnp.log(L)
+        d_alpha_low = -model * (1.0 / self.delta) * jnp.log(L)
         d_alpha_high = model * (1.0 / self.delta) * jnp.log(H)
         return jnp.stack([d_logA, d_flow, d_fhigh, d_alpha_low, d_alpha_high], axis=-1)
 
@@ -239,7 +239,7 @@ class ExtragalacticWd2A(AnalyticTemplate):
         fvec = jnp.asarray(frequency)
         L = 1.0 + (self.f_low / fvec) ** self.delta
         H = 1.0 + (fvec / self.f_high) ** self.delta
-        low_term = L ** ((self.alpha_low - self.mid_slope) / self.delta)
+        low_term = L ** ((self.mid_slope - self.alpha_low) / self.delta)
         high_term = H ** ((self.alpha_high - self.mid_slope) / self.delta)
         return (
             10.0**log_amplitude
