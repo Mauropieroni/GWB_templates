@@ -34,8 +34,24 @@ class FoptBrokenPowerLawOld(AnalyticTemplate):
         :math:`\log_{10}` of the peak frequency in Hz.
     """
 
-    # TODO: cite (arXiv:1512.06239)
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Caprini:2015zlo,
+    author = "Caprini, Chiara and others",
+    title = "{Science with the space-based interferometer eLISA. II: Gravitational waves
+        from cosmological phase transitions}",
+    eprint = "1512.06239",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "DESY-15-246",
+    doi = "10.1088/1475-7516/2016/04/001",
+    journal = "JCAP",
+    volume = "04",
+    pages = "001",
+    year = "2016"
+}
+""",
+    )
 
     def __init__(
         self,

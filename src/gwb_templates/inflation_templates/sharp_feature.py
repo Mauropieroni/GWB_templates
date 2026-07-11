@@ -8,8 +8,11 @@ Two parametrizations are offered:
 * :class:`SharpFeatureLog` — base-10 log amplitude and frequency for
   wide-range priors.
 
-Reference: arXiv:2407.04356 (GW from inflation in LISA: reconstruction
-pipeline and physics interpretation).
+References:
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
+  and physics interpretation).
+  arXiv:astro-ph/0102236 (Adams, Cresswell & Easther — original
+  step-potential oscillatory template).
 """
 
 from __future__ import annotations
@@ -45,8 +48,39 @@ class SharpFeature(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Adams:2001vc,
+    author = "Adams, Jennifer A. and Cresswell, Bevan and Easther, Richard",
+    title = "{Inflationary perturbations from a potential with a step}",
+    eprint = "astro-ph/0102236",
+    archivePrefix = "arXiv",
+    reportNumber = "CU-TP-1005",
+    doi = "10.1103/PhysRevD.64.123514",
+    journal = "Phys. Rev. D",
+    volume = "64",
+    pages = "123514",
+    year = "2001"
+}
+""",
+    )
 
     def __init__(
         self,
@@ -118,8 +152,39 @@ class SharpFeatureLog(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Adams:2001vc,
+    author = "Adams, Jennifer A. and Cresswell, Bevan and Easther, Richard",
+    title = "{Inflationary perturbations from a potential with a step}",
+    eprint = "astro-ph/0102236",
+    archivePrefix = "arXiv",
+    reportNumber = "CU-TP-1005",
+    doi = "10.1103/PhysRevD.64.123514",
+    journal = "Phys. Rev. D",
+    volume = "64",
+    pages = "123514",
+    year = "2001"
+}
+""",
+    )
 
     def __init__(
         self,

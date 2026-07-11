@@ -16,7 +16,11 @@ templates rely on the precomputed table
 ``data/Resonant_coefficients.npz`` and therefore inherit from
 :class:`~gwb_templates.template.NumericalTemplate`.
 
-Reference: arXiv:2407.04356.
+References:
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
+  and physics interpretation).
+  arXiv:0907.2916 (Flauger, McAllister, Pajer, Westphal & Xu — original
+  resonant oscillatory power-spectrum template from axion monodromy).
 """
 
 from __future__ import annotations
@@ -53,8 +57,41 @@ class FlatResonant(NumericalTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
+    )
 
     jittable: ClassVar[bool] = True
     differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]
@@ -134,8 +171,41 @@ class FlatResonantLog(NumericalTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
+    )
 
     jittable: ClassVar[bool] = True
     differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]

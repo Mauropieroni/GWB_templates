@@ -12,7 +12,11 @@ where :math:`x = 0.5 f\, 10^{\log\omega_{\rm ES}}`:
         \bigl(\sin x - 4\sin^2(x/2)/x\bigr)^2\,
         \Theta(2\gamma_{\rm ES} - x).
 
-Reference: arXiv:2407.04356.
+References:
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
+  and physics interpretation).
+  arXiv:2111.14664 (Fumagalli, Palma, Renaux-Petel, Sypsas, Witkowski &
+  Zenteno — original excited-states derivation).
 """
 
 from __future__ import annotations
@@ -44,8 +48,41 @@ class ExcitedStates(AnalyticTemplate):
         :math:`\log_{10}\omega_{\rm ES}`. Sets the oscillation frequency.
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Fumagalli:2021mpc,
+    author = "Fumagalli, Jacopo and Palma, Gonzalo A. and Renaux-Petel, S\'ebastien and
+        Sypsas, Spyros and Witkowski, Lukas T. and Zenteno, Cristobal",
+    title = "{Primordial gravitational waves from excited states}",
+    eprint = "2111.14664",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "IFT-UAM/CSIC-21-140",
+    doi = "10.1007/JHEP03(2022)196",
+    journal = "JHEP",
+    volume = "03",
+    pages = "196",
+    year = "2022"
+}
+""",
+    )
 
     def __init__(
         self,

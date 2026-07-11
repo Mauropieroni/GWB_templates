@@ -164,7 +164,27 @@ class CosmicStringModelIEos(NumericalTemplate):
     """
 
     jittable: ClassVar[bool] = False
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()  # TODO: cite
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Blanco-Pillado:2024aca,
+    author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
+        Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. and
+        Sousa, Lara and Wachter, Jeremy M.",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from cosmic strings in LISA: reconstruction pipeline
+        and physics interpretation}",
+    eprint = "2405.03740",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-02, CERN-TH-2024-085",
+    doi = "10.1088/1475-7516/2025/05/006",
+    journal = "JCAP",
+    volume = "05",
+    pages = "006",
+    year = "2025"
+}
+""",
+    )
 
     def __init__(
         self,

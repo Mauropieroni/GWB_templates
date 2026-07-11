@@ -59,8 +59,25 @@ class DoublePeak(AnalyticTemplate):
     DEFAULT_C1: ClassVar[float] = math.sqrt(2.0 / 3.0)
     DEFAULT_TILT_P: ClassVar[float] = 2.5
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+    )
 
     def __init__(
         self,

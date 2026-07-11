@@ -163,9 +163,9 @@ All templates listed below are class names (also their registry keys). The full 
 | `ExcitedStates` | `log_amplitude, log_gamma_ES, log_omega_ES` | Excited initial states |
 | `LognormalBumpSharp` | 6 params | `LognormalBump` × sharp-feature modulation |
 | `LognormalBumpSharpLog` | 6 params | `LognormalBumpSharp` with log-parametrized sharp triple |
-| `SharpFeature` | `A_sharp, omega_sharp_Hz, phase_sharp` | Sharp-feature oscillatory template (arXiv:1407.4034) |
+| `SharpFeature` | `A_sharp, omega_sharp_Hz, phase_sharp` | Sharp-feature oscillatory template (arXiv:2407.04356) |
 | `SharpFeatureLog` | log-space params | Log-parametrized `SharpFeature` |
-| `ResonantFeature` | `A_resonant, omega_resonant, phase_resonant` | Resonant-feature oscillatory template (arXiv:1407.4034). `NumericalTemplate`; loads `data/Resonant_coefficients.npz` |
+| `ResonantFeature` | `A_resonant, omega_resonant, phase_resonant` | Resonant-feature oscillatory template (arXiv:1002.0833, 2407.04356). `NumericalTemplate`; loads `data/Resonant_coefficients.npz` |
 | `ResonantFeatureLog` | log-space params | Log-parametrized `ResonantFeature` |
 | `FlatResonant` | `log_amplitude, A_resonant, omega_resonant, phase_resonant` | Flat amplitude with resonant modulation |
 | `FlatResonantLog` | log-space params | Log-parametrized `FlatResonant` |
@@ -176,9 +176,9 @@ All templates listed below are class names (also their registry keys). The full 
 | --- | --- | --- |
 | `GalacticBinaries` | `log_amplitude, alpha, log_fr1, log_frk, log_fr2` | Galactic binary confusion noise (Karnesis 2021) |
 | `GalacticBinariesA` | `log_amplitude` | Amplitude-only variant; fiducial shape from `galactic_pars(Tobs_yrs, snr, links)` |
-| `GalacticBinariesOld` | `log_amplitude, alpha, beta, kappa, gamma, fk` | Legacy galactic-binary template (Mangiagli 2020) |
+| `GalacticBinariesOld` | `log_amplitude, alpha, beta, kappa, gamma, fk` | Legacy galactic-binary template (Robson, Cornish & Liu 2019) |
 | `GalacticBinariesOldA` | `log_amplitude` | Amplitude-only legacy variant |
-| `ExtragalacticSobbhBns` | `log_amplitude, tilt` | Stellar-origin BBH + BNS foreground |
+| `ExtragalacticSobbhBns` | `log_amplitude, tilt` | Stellar-origin BBH + BNS foreground (arXiv:2304.06368) |
 | `ExtragalacticSobbhBnsA` | `log_amplitude` | Amplitude-only variant |
 | `ExtragalacticWd` | `log_amplitude, f_knee, delta, alpha1, alpha2` | Extragalactic WD foreground, single-knee broken PL |
 | `ExtragalacticWdA` | `log_amplitude` | Amplitude-only variant |

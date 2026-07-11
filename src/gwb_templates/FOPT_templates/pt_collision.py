@@ -11,6 +11,11 @@ Eur.Phys.J. C83 (2023) 2, 109; [arXiv:2208.11697 [astro-ph.CO]].
 
 The spectral shape is fixed to the U(1)-symmetric scalar field scenario
 (A=0.05, omega_p/beta=0.7, a=b=2.4, c=4.0).
+
+Also see: R. Jinno and M. Takimoto, "Gravitational waves from bubble
+collisions: An analytic derivation", Phys.Rev.D 95 (2017) 024009;
+[arXiv:1605.01403 [astro-ph.CO]] (original analytic bubble-collision
+derivation).
 """
 
 from __future__ import annotations
@@ -84,8 +89,40 @@ class PtCollision(AnalyticTemplate):
     SPECTRAL_INDEX_UV: ClassVar[float] = _N_2
     TRANSITION_SMOOTHNESS: ClassVar[float] = _A_1
 
-    # TODO: cite (arXiv:2208.11697)
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Lewicki:2022pdb,
+    author = "Lewicki, Marek and Vaskonen, Ville",
+    title = "{Gravitational waves from bubble collisions and fluid motion in strongly
+        supercooled phase transitions}",
+    eprint = "2208.11697",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1140/epjc/s10052-023-11241-3",
+    journal = "Eur. Phys. J. C",
+    volume = "83",
+    number = "2",
+    pages = "109",
+    year = "2023"
+}
+""",
+        r"""
+@article{Jinno:2016vai,
+    author = "Jinno, Ryusuke and Takimoto, Masahiro",
+    title = "{Gravitational waves from bubble collisions: An analytic derivation}",
+    eprint = "1605.01403",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "KEK-TH-1900",
+    doi = "10.1103/PhysRevD.95.024009",
+    journal = "Phys. Rev. D",
+    volume = "95",
+    number = "2",
+    pages = "024009",
+    year = "2017"
+}
+""",
+    )
 
     def __init__(
         self,

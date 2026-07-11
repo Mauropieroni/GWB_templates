@@ -1,7 +1,7 @@
 r"""
 Extragalactic white-dwarf binary foreground template.
 
-Implements Eq. B1 of Mangiagli et al. 2025 (arXiv:2506.18390):
+Implements Eq. B1 of Boileau et al. 2025 (arXiv:2506.18390):
 
 .. math::
 
@@ -44,8 +44,24 @@ class ExtragalacticWd(AnalyticTemplate):
         High-frequency slope (model goes as :math:`f^{-\alpha_2}`).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Boileau:2025jkv,
+    author = "Boileau, Guillaume and Bruel, Tristan and Toubiana, Alexandre and
+        Lamberts, Astrid and Christensen, Nelson",
+    title = "{Gravitational-wave background from extragalactic double white dwarfs for
+        LISA}",
+    eprint = "2506.18390",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.1051/0004-6361/202556052",
+    journal = "Astron. Astrophys.",
+    volume = "702",
+    pages = "A246",
+    year = "2025"
+}
+""",
+    )
 
     def __init__(
         self,
@@ -145,8 +161,24 @@ class ExtragalacticWdA(AnalyticTemplate):
     DEFAULT_ALPHA1: ClassVar[float] = -0.72
     DEFAULT_ALPHA2: ClassVar[float] = 2.43
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Boileau:2025jkv,
+    author = "Boileau, Guillaume and Bruel, Tristan and Toubiana, Alexandre and
+        Lamberts, Astrid and Christensen, Nelson",
+    title = "{Gravitational-wave background from extragalactic double white dwarfs for
+        LISA}",
+    eprint = "2506.18390",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.1051/0004-6361/202556052",
+    journal = "Astron. Astrophys.",
+    volume = "702",
+    pages = "A246",
+    year = "2025"
+}
+""",
+    )
 
     def __init__(
         self,
