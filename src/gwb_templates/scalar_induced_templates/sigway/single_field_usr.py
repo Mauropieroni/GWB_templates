@@ -19,7 +19,8 @@ through the radiation-domination kernel.
 Because the solver calls SciPy ODE routines, this path is **not** jittable and
 **not** autodiff-differentiable: the template advertises ``jittable = False``
 and computes parameter derivatives by finite differences (handled
-transparently by :class:`~gwb_templates.sigway_templates.base.SIGWAYTemplate`).
+transparently by the SIGWAY template base class,
+``scalar_induced_templates.sigway.base.SIGWAYTemplate``).
 
 Free parameters
 ---------------
@@ -40,7 +41,7 @@ from sigway.kernels import RadiationKernel
 from sigway.ms_solver import SingleFieldSolver
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.sigway.base import SIGWAYTemplate
 
 
 def usr_potential(
@@ -76,8 +77,8 @@ class SIGWAYSingleFieldUSR(SIGWAYTemplate):
 
     The paper's quasi-inflection-point potential is fixed; the free parameters
     are its coefficients ``(a, lam, v, nfac)``. For a *different* potential,
-    build one with
-    :func:`~gwb_templates.sigway_templates.base.sigway_template`, passing a
+    build one with the ``sigway_template`` factory (in
+    ``scalar_induced_templates.sigway.base``), passing a
     :class:`sigway.perturbations.SingleFieldPerturbations` wrapping your own
     :class:`sigway.ms_solver.SingleFieldSolver`.
 

@@ -52,13 +52,21 @@ class TestSigwayOptionalImport(unittest.TestCase):
         else:
             self.assertEqual(registered, [])
 
-    def test_public_symbols_match_availability(self):
+    def test_scalar_induced_base_always_available(self):
+        # The physics-category marker base is dependency-free: always importable.
+        from gwb_templates.scalar_induced_templates.base import (
+            ScalarInducedTemplate,
+        )
+
+        self.assertTrue(issubclass(ScalarInducedTemplate, Template))
+        self.assertTrue(hasattr(gwb_templates, "ScalarInducedTemplate"))
+
+    def test_sigway_symbols_match_availability(self):
         self.assertEqual(
-            hasattr(gwb_templates, "scalar_induced_templates"), SIGWAY_AVAILABLE
+            hasattr(gwb_templates, "sigway_template"), SIGWAY_AVAILABLE
         )
         self.assertEqual(
-            hasattr(gwb_templates.scalar_induced_templates.base, "SIGWAYTemplate"),
-            SIGWAY_AVAILABLE,
+            hasattr(gwb_templates, "SIGWAYTemplate"), SIGWAY_AVAILABLE
         )
 
 
@@ -95,7 +103,9 @@ class TestSigwayTemplates(unittest.TestCase):
     def test_factory_builds_and_registers(self):
         from sigway.kernels import RadiationKernel
 
-        from gwb_templates.scalar_induced_templates.base import sigway_template
+        from gwb_templates.scalar_induced_templates.sigway.base import (
+            sigway_template,
+        )
 
         def pz(k, logAs, logks):
             return 10.0**logAs * jnp.exp(-0.5 * (jnp.log(k / 10**logks) / 0.3) ** 2)

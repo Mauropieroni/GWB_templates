@@ -52,7 +52,7 @@ from sigway.perturbations import AnalyticPerturbations
 from sigway.kernels import InstantEMDKernel
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.sigway.base import SIGWAYTemplate
 
 
 def pzeta_flat_cutoff(

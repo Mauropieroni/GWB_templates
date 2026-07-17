@@ -29,7 +29,7 @@ from sigway.perturbations import AnalyticPerturbations
 from sigway.kernels import RadiationKernel
 from sigway.spectrum import OmegaGW
 
-from gwb_templates.scalar_induced_templates.base import SIGWAYTemplate
+from gwb_templates.scalar_induced_templates.sigway.base import SIGWAYTemplate
 
 
 def pzeta_broken_power_law(
