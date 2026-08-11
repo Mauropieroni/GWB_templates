@@ -60,6 +60,7 @@ from gwb_templates.cosmic_string_templates import (  # noqa: F401
     cosmic_string_model_i_eos,
 )
 from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa: F401
+from gwb_templates.cosmic_string_templates import cosmic_string_model_iii  # noqa: F401
 
 # ── Scalar-induced GWs ────────────────────────────────────────────────────────
 # The physics-category marker base is dependency-free and always available.
