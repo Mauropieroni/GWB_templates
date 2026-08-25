@@ -1,6 +1,6 @@
 # Global imports
-from collections.abc import Callable, Sequence
-from typing import Any, Optional, TypeAlias
+from collections.abc import Callable
+from typing import Any, TypeAlias
 
 import os
 import jax
@@ -38,7 +38,7 @@ def check_paths(paths: Iterable[str]) -> None:
             os.makedirs(path)
 
 
-def gradient_automatic(
+def gradient_autodiff(
     function: IndexedDerivativeFn,
     frequency: Array,
     parameters: ArrayLike,
@@ -64,7 +64,7 @@ def gradient_automatic(
     return jax.jacfwd(function, argnums=1)(frequency, parameters, *args, **kwargs)
 
 
-def hessian_automatic(
+def hessian_autodiff(
     function: IndexedDerivativeFn,
     frequency: Array,
     parameters: ArrayLike,
@@ -95,77 +95,222 @@ def hessian_automatic(
     )
 
 
-class Signal_model(object):
+def finite_difference_grad_theta(
+    function: IndexedDerivativeFn,
+    frequency: Array,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
     """
-    Container for a signal template and its first/second derivatives.
+    Central finite-difference gradient with respect to model parameters.
+    """
+    params = np.asarray(parameters, dtype=float)
+    npars = params.size
 
+    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
+    grad = np.empty(f0.shape + (npars,), dtype=float)
+
+    for i in range(npars):
+        p_plus = params.copy()
+        p_minus = params.copy()
+        p_plus[i] += step
+        p_minus[i] -= step
+
+        f_plus = np.asarray(function(frequency, p_plus, *args, **kwargs), dtype=float)
+        f_minus = np.asarray(function(frequency, p_minus, *args, **kwargs), dtype=float)
+        grad[..., i] = (f_plus - f_minus) / (2.0 * step)
+
+    return jnp.asarray(grad)
+
+
+def finite_difference_hess_theta(
+    function: IndexedDerivativeFn,
+    frequency: Array,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-5,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference Hessian with respect to model parameters.
+    """
+    params = np.asarray(parameters, dtype=float)
+    npars = params.size
+
+    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
+    hess = np.empty(f0.shape + (npars, npars), dtype=float)
+
+    for i in range(npars):
+        for j in range(i, npars):
+            if i == j:
+                p_plus = params.copy()
+                p_minus = params.copy()
+                p_plus[i] += step
+                p_minus[i] -= step
+
+                f_plus = np.asarray(
+                    function(frequency, p_plus, *args, **kwargs), dtype=float
+                )
+                f_minus = np.asarray(
+                    function(frequency, p_minus, *args, **kwargs), dtype=float
+                )
+                value = (f_plus - 2.0 * f0 + f_minus) / (step**2)
+            else:
+                p_pp = params.copy()
+                p_pm = params.copy()
+                p_mp = params.copy()
+                p_mm = params.copy()
+                p_pp[i] += step
+                p_pp[j] += step
+                p_pm[i] += step
+                p_pm[j] -= step
+                p_mp[i] -= step
+                p_mp[j] += step
+                p_mm[i] -= step
+                p_mm[j] -= step
+
+                f_pp = np.asarray(
+                    function(frequency, p_pp, *args, **kwargs), dtype=float
+                )
+                f_pm = np.asarray(
+                    function(frequency, p_pm, *args, **kwargs), dtype=float
+                )
+                f_mp = np.asarray(
+                    function(frequency, p_mp, *args, **kwargs), dtype=float
+                )
+                f_mm = np.asarray(
+                    function(frequency, p_mm, *args, **kwargs), dtype=float
+                )
+                value = (f_pp - f_pm - f_mp + f_mm) / (4.0 * step**2)
+
+            hess[..., i, j] = value
+            hess[..., j, i] = value
+
+    return jnp.asarray(hess)
+
+
+def finite_difference_df(
+    function: IndexedDerivativeFn,
+    frequency: Array,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference first derivative with respect to frequency.
+    """
+    freq = np.asarray(frequency, dtype=float)
+
+    if freq.ndim == 0:
+        f_plus = np.asarray(
+            function(freq + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(freq - step, parameters, *args, **kwargs), dtype=float
+        )
+        return jnp.asarray((f_plus - f_minus) / (2.0 * step))
+
+    flat = freq.ravel()
+    deriv = np.empty(flat.shape, dtype=float)
+    for k, ff in enumerate(flat):
+        f_plus = np.asarray(
+            function(ff + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(ff - step, parameters, *args, **kwargs), dtype=float
+        )
+        deriv[k] = (f_plus - f_minus) / (2.0 * step)
+
+    return jnp.asarray(deriv.reshape(freq.shape))
+
+
+def finite_difference_d2f2(
+    function: IndexedDerivativeFn,
+    frequency: Array,
+    parameters: ArrayLike,
+    *args: Any,
+    step: float = 1e-5,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference second derivative with respect to frequency.
+    """
+    freq = np.asarray(frequency, dtype=float)
+
+    if freq.ndim == 0:
+        f0 = np.asarray(function(freq, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(freq + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(freq - step, parameters, *args, **kwargs), dtype=float
+        )
+        return jnp.asarray((f_plus - 2.0 * f0 + f_minus) / (step**2))
+
+    flat = freq.ravel()
+    deriv2 = np.empty(flat.shape, dtype=float)
+    for k, ff in enumerate(flat):
+        f0 = np.asarray(function(ff, parameters, *args, **kwargs), dtype=float)
+        f_plus = np.asarray(
+            function(ff + step, parameters, *args, **kwargs), dtype=float
+        )
+        f_minus = np.asarray(
+            function(ff - step, parameters, *args, **kwargs), dtype=float
+        )
+        deriv2[k] = (f_plus - 2.0 * f0 + f_minus) / (step**2)
+
+    return jnp.asarray(deriv2.reshape(freq.shape))
+
+
+def finite_difference_d2f_dtheta(
+    function: IndexedDerivativeFn,
+    frequency: Array,
+    parameters: ArrayLike,
+    *args: Any,
+    step_f: float = 1e-5,
+    step_theta: float = 1e-6,
+    **kwargs: Any,
+) -> Array:
+    """
+    Central finite-difference mixed derivative d/df(d/dtheta).
     """
 
-    def __init__(
-        self,
-        model_name: str,
-        template: TemplateFn,
-        dtemplate: Optional[IndexedDerivativeFn] = None,
-        d2template: Optional[IndexedDerivativeFn] = None,
-        model_label: Optional[str] = None,
-        parameter_names: Optional[Sequence[str]] = None,
-        parameter_labels: Optional[Sequence[str]] = None,
-        prior: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """
-        Initialize a signal model wrapper.
-
-        Args:
-            model_name: Human-readable model identifier.
-            template: Base template function S(f, theta, ...).
-            dtemplate: Optional indexed first-derivative function.
-                If omitted, jacfwd(template) is used.
-            model_label: Optional formatted label for the model.
-            parameter_names: Optional ordered parameter names.
-            parameter_labels: Optional formatted labels for plots.
-            prior: Optional dictionary of parameter priors, with parameter names as
-                keys and prior specifications as values.
-        Returns:
-            None.
-        """
-
-        self.model_name = model_name
-        self.model_label = model_label if model_label is not None else model_name
-        self.parameter_names = (
-            list(parameter_names) if parameter_names is not None else []
+    def _mixed_at_scalar_freq(ff: float) -> np.ndarray:
+        g_plus = np.asarray(
+            finite_difference_grad_theta(
+                function,
+                ff + step_f,
+                parameters,
+                *args,
+                step=step_theta,
+                **kwargs,
+            ),
+            dtype=float,
         )
-        self.parameter_labels = (
-            list(parameter_labels) if parameter_labels is not None else []
+        g_minus = np.asarray(
+            finite_difference_grad_theta(
+                function,
+                ff - step_f,
+                parameters,
+                *args,
+                step=step_theta,
+                **kwargs,
+            ),
+            dtype=float,
         )
+        return (g_plus - g_minus) / (2.0 * step_f)
 
-        self.template = template
+    freq = np.asarray(frequency, dtype=float)
 
-        if dtemplate is not None:
-            self.dtemplate = dtemplate
-        else:
-            self.dtemplate = lambda *args, **kwargs: gradient_automatic(
-                template, *args, **kwargs
-            )
+    if freq.ndim == 0:
+        return jnp.asarray(_mixed_at_scalar_freq(float(freq)))
 
-        if d2template is not None:
-            self.d2template = d2template
-        else:
-            self.d2template = lambda *args, **kwargs: hessian_automatic(
-                template, *args, **kwargs
-            )
-
-        self.prior = prior if prior is not None else {}
-
-    @property
-    def Nparams(self) -> int:
-        """
-        Return the number of parameters in the model.
-
-        Returns:
-            Number of parameters.
-        """
-
-        return len(self.parameter_names)
+    flat = freq.ravel()
+    mixed = np.asarray([_mixed_at_scalar_freq(float(ff)) for ff in flat], dtype=float)
+    return jnp.asarray(mixed.reshape(freq.shape + (np.asarray(parameters).size,)))
 
 
 def make_log_log_interpolator(

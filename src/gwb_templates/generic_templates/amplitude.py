@@ -3,59 +3,97 @@ Amplitude-only (flat) spectrum template.
 
 Single-parameter model for a frequency-independent GWB:
 
-    Omega(f) = 10^A
+.. math::
+
+    \\Omega_{\\mathrm{GW}} h^2(f) = 10^{\\alpha}
 
 Used as a simple baseline model or as a building block for composite
-spectra (e.g. ``flat_resonant``).
+spectra.
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
 
-from gwb_templates import utils as ut
+from gwb_templates.template import AnalyticTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-def amplitude(freq: ArrayLike, pars: ParamLike) -> jax.Array:
+class Amplitude(AnalyticTemplate):
+    r"""
+    Flat (amplitude-only) GWB spectrum.
+
+    Free parameters
+    ---------------
+    log_amplitude
+        Base-10 logarithm of the (frequency-independent) amplitude.
     """
-    Flat (amplitude-only) spectrum: Omega(f) = 10^A.
 
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude].
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_amplitude = pars[0]
-    return 10.0**log_amplitude * jnp.ones_like(freq)
+    #: TODO: cite
+    bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        default_labels = {
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        }
+        default_priors = {
+            "log_amplitude": {"min": -20.0, "max": -5.0},
+        }
 
-def d1amplitude(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``amplitude`` w.r.t. pars.
+        super().__init__(
+            model_name=model_name,
+            model_label=model_label if model_label is not None else "Amplitude",
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude].
-    Returns:
-        jax.Array of shape (N_freq, 1):
-            d/d(log_A)  = model * ln(10)
-    """
-    model = amplitude(freq, pars)
-    return (model * jnp.log(10.0))[:, None]
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_amplitude: ArrayLike,
+    ) -> jax.Array:
+        r"""
+        Evaluate the flat spectrum at ``frequency``.
 
+        Args:
+            frequency: Frequency value(s) in Hz.
+            log_amplitude: :math:`\log_{10}` amplitude.
 
-amplitude_model = ut.Signal_model(
-    "amplitude",
-    amplitude,
-    dtemplate=d1amplitude,
-    model_label="Amplitude",
-    parameter_names=["log_amplitude"],
-    parameter_labels=[r"$\log_{10}(h^2\,\Omega_*)$"],
-    prior={"log_amplitude": {"min": -20.0, "max": -5.0}},
-)
+        Returns:
+            Spectrum :math:`\Omega_{\mathrm{GW}} h^2(f)` at each input
+            frequency.
+        """
+        return 10.0**log_amplitude * jnp.ones_like(frequency)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the flat spectrum.
+
+        :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial(\log_{10}A)
+        = \Omega_{\mathrm{GW}} h^2 \cdot \ln 10`.
+        """
+        (log_amplitude,) = theta
+        model = self.omega_gw_h2(frequency, log_amplitude)
+        d_logA = model * jnp.log(10.0)
+        return d_logA[..., None]

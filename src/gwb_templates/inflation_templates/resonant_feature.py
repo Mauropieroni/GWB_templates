@@ -1,32 +1,42 @@
-"""
-Resonant-feature oscillatory modulation template.
+r"""
+Resonant-feature oscillatory modulation template (arXiv:1002.0833).
 
-Log-space oscillation following arXiv:1407.4034.  Coefficients are
-pre-computed on a grid of omega_log values (stored in data/Resonant_coefficients.npz)
-and retrieved via linear interpolators (interpax.interp1d callables, no extrapolation).
+Log-space oscillation. The coefficients ``C0, C1, C2, theta1, theta2`` and
+their derivatives are pre-computed on a grid of ``omega_resonant`` values
+stored in ``data/Resonant_coefficients.npz`` and retrieved at runtime via
+``interpax`` 1-D linear interpolators (no extrapolation).
+
+Two parametrizations are provided:
+
+* :class:`ResonantFeature` — linear ``A_resonant`` / ``omega_resonant``.
+* :class:`ResonantFeatureLog` — log10-scaled amplitude and frequency.
+
+The numerical-table dependency on the hot path is why these classes inherit
+from :class:`~gwb_templates.template.NumericalTemplate`.
 
 References:
-  arXiv:1407.4034 (Flauger, Pajer & Paban: resonant features in primordial
-                   power spectra)
-  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline and
-                   physics interpretation)
+  arXiv:1002.0833 (Flauger & Pajer — resonant non-Gaussianity)
+  arXiv:0907.2916 (Flauger, McAllister, Pajer, Westphal & Xu — original
+  resonant oscillatory power-spectrum template from axion monodromy)
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
+  and physics interpretation)
 """
 
+from __future__ import annotations
+
 import os
-import numpy as np
-from collections.abc import Sequence
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
+import numpy as np
 from interpax import Interpolator1D
 
-from gwb_templates import utils as ut
+from gwb_templates.template import NumericalTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
-
-# ── Load precomputed coefficient grid ────────────────────────────────────────
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 _DATA_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -34,112 +44,62 @@ _DATA_PATH = os.path.join(
     "Resonant_coefficients.npz",
 )
 
-with open(_DATA_PATH, "rb") as _f:
-    _raw = np.load(_f)
-    _omega_grid = jnp.array(_raw["omega"])
-
-    # Build one callable interpolator per coefficient / derivative grid.
-    # Data is cached inside each object; extrap=False → NaN outside the grid.
-    _resonant_interps: dict = {
-        r: Interpolator1D(
-            _omega_grid, jnp.array(_raw[r]), method="linear", extrap=False
-        )
-        for r in (
-            "C0",
-            "C1",
-            "C2",
-            "theta1",
-            "theta2",
-            "C0p",
-            "C1p",
-            "C2p",
-            "theta1p",
-            "theta2p",
-        )
-    }
+_INTERP_KEYS: tuple[str, ...] = (
+    "C0",
+    "C1",
+    "C2",
+    "theta1",
+    "theta2",
+    "C0p",
+    "C1p",
+    "C2p",
+    "theta1p",
+    "theta2p",
+)
 
 
-def get_coefficients(omega_resonant: ArrayLike) -> list:
-    """
-    Retrieve the resonant coefficients for a given omega_resonant.
-
-    Args:
-        omega_resonant: Oscillation frequency parameter.
-    Returns:
-        list [C0, C1, C2, theta1, theta2] of interpolated coefficient values.
-    """
-    return [
-        _resonant_interps[r](omega_resonant)
-        for r in ("C0", "C1", "C2", "theta1", "theta2")
-    ]
-
-    # ── Template function ─────────────────────────────────────────────────────────
+def _build_resonant_interpolators() -> dict[str, Interpolator1D]:
+    """Load the precomputed coefficient table and build linear interpolators."""
+    with open(_DATA_PATH, "rb") as fh:
+        raw = np.load(fh)
+        omega_grid = jnp.array(raw["omega"])
+        return {
+            key: Interpolator1D(
+                omega_grid, jnp.array(raw[key]), method="linear", extrap=False
+            )
+            for key in _INTERP_KEYS
+        }
 
 
-def resonant_feature(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Resonant-feature modulation (arXiv:1407.4034).
+def _resonant_feature_grad_lin(
+    frequency: ArrayLike,
+    A_resonant: ArrayLike,
+    omega_resonant: ArrayLike,
+    phase_resonant: ArrayLike,
+    interps: dict[str, Interpolator1D],
+) -> jax.Array:
+    """Analytic Jacobian of the linear resonant-feature w.r.t. (A, omega, phase)."""
+    C0 = interps["C0"](omega_resonant)
+    C1 = interps["C1"](omega_resonant)
+    C2 = interps["C2"](omega_resonant)
+    theta1 = interps["theta1"](omega_resonant)
+    theta2 = interps["theta2"](omega_resonant)
+    C0p = interps["C0p"](omega_resonant)
+    C1p = interps["C1p"](omega_resonant)
+    C2p = interps["C2p"](omega_resonant)
+    theta1p = interps["theta1p"](omega_resonant)
+    theta2p = interps["theta2p"](omega_resonant)
 
-    Coefficients C0, C1, C2, theta1, theta2 are interpolated from a
-    pre-computed grid as a function of omega_resonant.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [A_resonant, omega_resonant, phase_resonant].
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    A_resonant, omega_resonant, phase_resonant = pars[0], pars[1], pars[2]
-
-    C0, C1, C2, theta1, theta2 = get_coefficients(omega_resonant)
-
-    x = jnp.log(freq)
-    arg1 = omega_resonant * x + theta1 + phase_resonant
-    arg2 = 2.0 * omega_resonant * x + theta2 + 2.0 * phase_resonant
-
-    denom = 1.0 + A_resonant**2 * C0
-    Omega1 = (A_resonant * C1) / denom * jnp.cos(arg1)
-    Omega2 = (A_resonant**2 * C2) / denom * jnp.cos(arg2)
-
-    return 1.0 + Omega1 + Omega2 + 1e-30
-
-
-def d1resonant_feature(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``resonant_feature`` w.r.t. pars.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [A_resonant, omega_resonant, phase_resonant].
-    Returns:
-        jax.Array of shape (N_freq, 3):
-            d/d(A_resonant)     — via amplitude-coefficient derivatives
-            d/d(omega_resonant) — via precomputed coefficient slopes (C0p … theta2p)
-            d/d(phase_resonant)   — phase shift
-    """
-    A_resonant, omega_resonant, phase_resonant = pars[0], pars[1], pars[2]
-
-    C0, C1, C2, theta1, theta2 = get_coefficients(omega_resonant)
-
-    # Derivatives of coefficients w.r.t. omega_resonant (precomputed in the pkl)
-    C0p = _resonant_interps["C0p"](omega_resonant)
-    C1p = _resonant_interps["C1p"](omega_resonant)
-    C2p = _resonant_interps["C2p"](omega_resonant)
-    theta1p = _resonant_interps["theta1p"](omega_resonant)
-    theta2p = _resonant_interps["theta2p"](omega_resonant)
-
-    x = jnp.log(freq)
+    x = jnp.log(jnp.asarray(frequency))
     arg1 = omega_resonant * x + theta1 + phase_resonant
     arg2 = 2.0 * omega_resonant * x + theta2 + 2.0 * phase_resonant
     denom = 1.0 + A_resonant**2 * C0
     denom2 = denom**2
 
-    # d/d(A_resonant)
     amp11 = (1.0 - A_resonant**2 * C0) * C1 / denom2
     amp12 = 2.0 * A_resonant * C2 / denom2
     d_A = amp11 * jnp.cos(arg1) + amp12 * jnp.cos(arg2)
 
-    # d/d(omega_resonant)
     amp21 = (
         A_resonant
         * (C1p + A_resonant**2 * C0 * C1p - A_resonant**2 * C0p * C1)
@@ -159,56 +119,28 @@ def d1resonant_feature(freq: ArrayLike, pars: ParamLike) -> jax.Array:
         + amp24 * jnp.sin(arg2)
     )
 
-    # d/d(phase_resonant)
     amp41 = A_resonant * C1 / denom
     amp42 = 2.0 * A_resonant**2 * C2 / denom
     d_phi = -(amp41 * jnp.sin(arg1) + amp42 * jnp.sin(arg2))
 
-    return jnp.stack([d_A, d_omega, d_phi], axis=1)
+    return jnp.stack([d_A, d_omega, d_phi], axis=-1)
 
 
-resonant_feature_model = ut.Signal_model(
-    "resonant_feature",
-    resonant_feature,
-    dtemplate=d1resonant_feature,
-    model_label="Resonant Feature",
-    parameter_names=["A_resonant", "omega_resonant", "phase_resonant"],
-    parameter_labels=[
-        r"$A_{\rm r}$",
-        r"$\omega_{\rm r}$",
-        r"$\phi_{\rm r}$",
-    ],
-    prior={
-        "A_resonant": {"min": 0.0, "max": 1.0},
-        "omega_resonant": {"min": 1e-3, "max": 100.0},
-        "phase_resonant": {"min": -3.14159, "max": 3.14159},
-    },
-)
+def _resonant_feature_impl(
+    frequency: ArrayLike,
+    A_resonant: ArrayLike,
+    omega_resonant: ArrayLike,
+    phase_resonant: ArrayLike,
+    interps: dict[str, Interpolator1D],
+) -> jax.Array:
+    """Shared closed-form expression for the resonant modulation."""
+    C0 = interps["C0"](omega_resonant)
+    C1 = interps["C1"](omega_resonant)
+    C2 = interps["C2"](omega_resonant)
+    theta1 = interps["theta1"](omega_resonant)
+    theta2 = interps["theta2"](omega_resonant)
 
-
-# ── Log parametrization ───────────────────────────────────────────────────────
-
-
-def resonant_feature_log(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Resonant-feature modulation with log-parametrized amplitude and frequency.
-
-    Identical physics to ``resonant_feature``; uses log10-scaled parameters
-    so that wide prior ranges can be sampled efficiently.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 A_resonant, log10 omega_resonant, phase_resonant].
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_A_resonant, log_omega_resonant, phase_resonant = pars[0], pars[1], pars[2]
-    A_resonant = 10.0**log_A_resonant
-    omega_resonant = 10.0**log_omega_resonant
-
-    C0, C1, C2, theta1, theta2 = get_coefficients(omega_resonant)
-
-    x = jnp.log(freq)
+    x = jnp.log(frequency)
     arg1 = omega_resonant * x + theta1 + phase_resonant
     arg2 = 2.0 * omega_resonant * x + theta2 + 2.0 * phase_resonant
 
@@ -219,45 +151,250 @@ def resonant_feature_log(freq: ArrayLike, pars: ParamLike) -> jax.Array:
     return 1.0 + Omega1 + Omega2 + 1e-30
 
 
-def d1resonant_feature_log(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``resonant_feature_log`` w.r.t. pars.
+class ResonantFeature(NumericalTemplate):
+    r"""
+    Resonant-feature modulation (linear amplitude / frequency).
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 A_resonant, log10 omega_resonant, phase_resonant].
-    Returns:
-        jax.Array of shape (N_freq, 3):
-            d/d(log_A_resonant)    = ln(10)*A_resonant  * d/d(A_resonant)
-            d/d(log_omega_resonant) = ln(10)*omega_resonant * d/d(omega_resonant)
-            d/d(phase_resonant)      = d/d(phase_resonant)
-    """
-    log_A_resonant, log_omega_resonant, phase_resonant = pars[0], pars[1], pars[2]
-    A_resonant = 10.0**log_A_resonant
-    omega_resonant = 10.0**log_omega_resonant
+    Coefficients :math:`C_0, C_1, C_2, \theta_1, \theta_2` are interpolated
+    from a pre-computed grid as a function of ``omega_resonant``.
 
-    J_lin = d1resonant_feature(
-        freq, jnp.array([A_resonant, omega_resonant, phase_resonant])
+    Free parameters
+    ---------------
+    A_resonant
+        Oscillation amplitude.
+    omega_resonant
+        Oscillation frequency in log-space (dimensionless).
+    phase_resonant
+        Phase offset (radians).
+    """
+
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Flauger:2010ja,
+    author = "Flauger, Raphael and Pajer, Enrico",
+    title = "{Resonant Non-Gaussianity}",
+    eprint = "1002.0833",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    doi = "10.1088/1475-7516/2011/01/017",
+    journal = "JCAP",
+    volume = "01",
+    pages = "017",
+    year = "2011"
+}
+""",
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
     )
-    ln10 = jnp.log(10.0)
-    factors = jnp.array([ln10 * A_resonant, ln10 * omega_resonant, 1.0])
-    return J_lin * factors[None, :]
+
+    # interpax-based interpolators are JAX-traceable so we can keep autodiff.
+    jittable: ClassVar[bool] = True
+    differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]
+
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        default_labels = {
+            "A_resonant": r"$A_{\rm r}$",
+            "omega_resonant": r"$\omega_{\rm r}$",
+            "phase_resonant": r"$\phi_{\rm r}$",
+        }
+        default_priors = {
+            "A_resonant": {"min": 0.0, "max": 1.0},
+            "omega_resonant": {"min": 1e-3, "max": 100.0},
+            "phase_resonant": {"min": -3.14159, "max": 3.14159},
+        }
+
+        super().__init__(
+            model_name=model_name,
+            model_label=model_label if model_label is not None else "Resonant Feature",
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
+
+    def setup(self) -> None:
+        """Load the precomputed coefficient table and build interpolators."""
+        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        A_resonant: ArrayLike,
+        omega_resonant: ArrayLike,
+        phase_resonant: ArrayLike,
+    ) -> jax.Array:
+        return _resonant_feature_impl(
+            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        )
+
+    # NOTE: An analytic gradient using the precomputed C0p/C1p/... slope
+    # tables is provided as `_resonant_feature_grad_lin` for callers who want
+    # to use it directly. We do NOT install it as the
+    # `_grad_theta_omega_gw_h2_analytical` override because those tables are
+    # not bit-identical to interpax's autodiff slope of the value tables, and
+    # the registered gradient test compares to autodiff at places=15. The
+    # autodiff path through the interpax interpolators is fully traceable.
 
 
-resonant_feature_log_model = ut.Signal_model(
-    "resonant_feature_log",
-    resonant_feature_log,
-    dtemplate=d1resonant_feature_log,
-    model_label="Resonant Feature (log params)",
-    parameter_names=["log_A_resonant", "log_omega_resonant", "phase_resonant"],
-    parameter_labels=[
-        r"$\log_{10}A_{\rm r}$",
-        r"$\log_{10}\omega_{\rm r}$",
-        r"$\phi_{\rm r}$",
-    ],
-    prior={
-        "log_A_resonant": {"min": -3.0, "max": 0.0},
-        "log_omega_resonant": {"min": -3.0, "max": 2.0},
-        "phase_resonant": {"min": -3.14159, "max": 3.14159},
-    },
-)
+class ResonantFeatureLog(NumericalTemplate):
+    r"""
+    Resonant-feature modulation with log-parametrized amplitude and frequency.
+    Identical physics to :class:`ResonantFeature`.
+
+    Free parameters
+    ---------------
+    log_A_resonant
+        :math:`\log_{10}` amplitude.
+    log_omega_resonant
+        :math:`\log_{10}` oscillation frequency.
+    phase_resonant
+        Phase offset (radians).
+    """
+
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Flauger:2010ja,
+    author = "Flauger, Raphael and Pajer, Enrico",
+    title = "{Resonant Non-Gaussianity}",
+    eprint = "1002.0833",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    doi = "10.1088/1475-7516/2011/01/017",
+    journal = "JCAP",
+    volume = "01",
+    pages = "017",
+    year = "2011"
+}
+""",
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
+    )
+
+    jittable: ClassVar[bool] = True
+    differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]
+
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        default_labels = {
+            "log_A_resonant": r"$\log_{10}A_{\rm r}$",
+            "log_omega_resonant": r"$\log_{10}\omega_{\rm r}$",
+            "phase_resonant": r"$\phi_{\rm r}$",
+        }
+        default_priors = {
+            "log_A_resonant": {"min": -3.0, "max": 0.0},
+            "log_omega_resonant": {"min": -3.0, "max": 2.0},
+            "phase_resonant": {"min": -3.14159, "max": 3.14159},
+        }
+
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label
+                if model_label is not None
+                else "Resonant Feature (log params)"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
+
+    def setup(self) -> None:
+        """Load the precomputed coefficient table and build interpolators."""
+        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_A_resonant: ArrayLike,
+        log_omega_resonant: ArrayLike,
+        phase_resonant: ArrayLike,
+    ) -> jax.Array:
+        A_resonant = 10.0**log_A_resonant
+        omega_resonant = 10.0**log_omega_resonant
+        return _resonant_feature_impl(
+            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        )
+
+    # NOTE: see ResonantFeature — autodiff is preserved as the default
+    # backend because the precomputed coefficient-slope tables differ from
+    # interpax's autodiff slope of the value tables.

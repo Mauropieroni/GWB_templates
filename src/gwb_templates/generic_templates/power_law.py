@@ -1,99 +1,134 @@
-"""
+r"""
 Standard power-law spectrum template.
 
-Two-parameter model for a power-law GWB:
+Two-parameter model for a GWB:
 
-    Omega(f) = 10^A * (f / f_pivot)^tilt
+.. math::
 
-The default pivot frequency is 3 mHz (close to the centre of the LISA band).
-This is the simplest phenomenological model for a GWB signal and is widely
-used as a baseline in GWB searches.
+    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha_{\mathrm{PL}}}
+        \left(\frac{f}{f_{\mathrm{pivot}}}\right)^{n_T}
+
+The default pivot frequency is 3 mHz (roughly the centre of the LISA
+band). This is the simplest phenomenological GWB model and is widely
+used as a baseline in stochastic-background searches.
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
-# Local
-from gwb_templates import utils as ut
-
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
+from gwb_templates.template import AnalyticTemplate
 
 
-# A simple PL model for the signal
-def power_law(
-    freq: ArrayLike,
-    pars: ParamLike,
-    pivot: float = 3e-3,
-) -> jax.Array:
-    """
-    Evaluate a power-law spectrum.
+class PowerLaw(AnalyticTemplate):
+    r"""
+    Standard power-law GWB spectrum.
 
-    Args:
-        freq: Frequency grid where the model is evaluated.
-        pars: Model parameters [log10 amplitude, spectral index].
-        pivot: Pivot frequency used for normalization.
+    Free parameters
+    ---------------
+    log_amplitude
+        Base-10 logarithm of the amplitude at the pivot frequency.
+    tilt
+        Spectral index.
 
-    Returns:
-        Array with the model value at each input frequency.
+    Configuration
+    -------------
+    pivot
+        Reference frequency (Hz) used to normalize the power law.
+        Defaults to :attr:`DEFAULT_PIVOT` (3 mHz). Stored as an instance
+        attribute set at construction time; instantiate two ``PowerLaw``
+        objects to sweep across pivots.
     """
 
-    # Unpack parameters
-    log_amplitude, tilt = pars
+    #: Default pivot frequency in Hz (LISA-band centre).
+    DEFAULT_PIVOT: ClassVar[float] = 3e-3
 
-    # Normalize frequencies with respect to the pivot value
-    x = freq / pivot
+    #: TODO: populate with the canonical PL-template references once we
+    #: settle on which papers to cite by default.
+    bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
-    # Build the power-law spectrum
-    return 10.0**log_amplitude * x**tilt
+    def __init__(
+        self,
+        pivot: float = DEFAULT_PIVOT,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        """
+        Args:
+            pivot: Reference frequency in Hz.
+            model_name: Override instance identifier (see
+                :class:`~gwb_templates.template.Template`).
+            model_label: Override display label. Defaults to
+                ``"Power Law Model"``.
+            parameter_labels: Sparse override map for parameter display
+                labels. Defaults provide LaTeX-friendly labels.
+            prior_by_param: Sparse override map for parameter priors.
+                Defaults to a broad uniform prior on each parameter.
+        """
+        self.pivot: float = float(pivot)
 
+        default_labels = {
+            "log_amplitude": r"$\alpha_{\mathrm{PL}}$",
+            "tilt": r"$n_{T}$",
+        }
+        default_priors = {
+            "log_amplitude": {"min": -20.0, "max": -5.0},
+            "tilt": {"min": -10.0, "max": 10.0},
+        }
 
-def d1power_law(
-    frequency: ArrayLike,
-    parameters: ParamLike,
-    pivot: float = 3e-3,
-) -> jax.Array:
-    """
-    Evaluate the first derivative of the power-law spectrum.
+        super().__init__(
+            model_name=model_name,
+            model_label=model_label if model_label is not None else "Power Law Model",
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
-    Args:
-        index: Parameter index (0 for log-amplitude, 1 for tilt).
-        frequency: Frequency grid.
-        parameters: Parameter vector [log10 amplitude, spectral index].
-        pivot: Pivot frequency used for normalization.
+    def omega_gw_h2(
+        self,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        tilt: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Evaluate the power-law spectrum at ``frequency``.
 
-    Returns:
-        Gradient evaluated on frequency for all selected parameters.
-        shape: (len(frequency), npars)
-    """
+        Args:
+            frequency: Frequency value(s) in Hz.
+            log_amplitude: :math:`\log_{10}` amplitude at the pivot.
+            tilt: Spectral index.
 
-    # compute the model
-    model = power_law(frequency, parameters, pivot=pivot)
+        Returns:
+            Spectrum :math:`\Omega_{\mathrm{GW}} h^2(f)` at each input
+            frequency.
+        """
+        x = frequency / self.pivot
+        return 10.0**log_amplitude * x**tilt
 
-    dmodel_dlnA = model * jnp.full_like(frequency, jnp.log(10.0))
-    # derivative of the log of the model w.r.t the tilt
-    dmodel_dtilt = model * jnp.log(frequency / pivot)
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian of the power-law spectrum.
 
-    # stack the log derivatives along the last axis to get shape (len(frequency), npars)
-    gradient = jnp.stack((dmodel_dlnA, dmodel_dtilt), axis=-1)
-
-    # return the gradient with the parameter axis last: (len(frequency), npars)
-    return gradient
-
-
-# Initialize the signal model
-power_law_model = ut.Signal_model(
-    "power_law",
-    power_law,
-    dtemplate=d1power_law,
-    model_label="Power Law Model",
-    parameter_names=["log_amplitude", "tilt"],
-    parameter_labels=[r"$\alpha_{\rm PL}$", r"$n_{\rm T}$"],
-    prior={
-        "log_amplitude": {"min": -20.0, "max": -5.0},
-        "tilt": {"min": -10.0, "max": 10.0},
-    },
-)
+        :math:`\partial/\partial(\log_{10}A) = \text{model} \cdot \ln 10`,
+        :math:`\partial/\partial(\text{tilt})
+        = \text{model} \cdot \ln(f/f_{\rm pivot})`.
+        """
+        log_amplitude, tilt = theta
+        model = self.omega_gw_h2(frequency, log_amplitude, tilt)
+        d_logA = model * jnp.log(10.0)
+        d_tilt = model * jnp.log(frequency / self.pivot)
+        return jnp.stack((d_logA, d_tilt), axis=-1)

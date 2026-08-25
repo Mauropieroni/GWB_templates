@@ -3,135 +3,93 @@ Cosmic String Model II (1 parameter) and Abelian Higgs Model II (2 parameters).
 
 Model II uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and
 evaluates h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic
-differentiation works and analytical gradients can be verified against it.
+differentiation works.
 
-Analytical gradient derivation (chain rule for bilinear interpolation):
-
-  Let S(log_Gmu, log10_f) = bilinear_interp(log10_omega_grid, ix, iy)
-  where  ix = (log_Gmu  - gmu_min)  / (gmu_max  - gmu_min)  * (N_gmu  - 1)
-         iy = (log10_f  - freq_min) / (freq_max - freq_min) * (N_freq - 1)
-
-  h2_Omega = 10^S
-
-  d(h2_Omega)/d(log_Gmu)
-    = ln(10) * h2_Omega * dS/d(log_Gmu)
-    = ln(10) * h2_Omega * dS/d(ix) * d(ix)/d(log_Gmu)
-
-  dS/d(ix) = (1 - ty) * (g[kx+1, ky] - g[kx, ky])
-           +       ty  * (g[kx+1, ky+1] - g[kx, ky+1])
-
-  where kx = floor(ix), tx = ix - kx, ky = floor(iy), ty = iy - ky
-  and g[i, j] are the log10_omega grid values.
-
-  d(ix)/d(log_Gmu) = (N_gmu - 1) / (gmu_max - gmu_min)
-
-For abelian_higgs_model_ii = 10^logf * h2_Omega_II:
-  d/d(log_Gmu) = 10^logf * d(h2_Omega_II)/d(log_Gmu)
-  d/d(logf)    = ln(10) * h2_Omega_AH
-
-Reference: arXiv:1909.00819 (BOS P_n loop distribution);
-          arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction
-          pipeline and physics interpretation).
+Reference: arXiv:1309.6637 (Blanco-Pillado, Olum & Shlaer — original BOS
+           loop-number-density distribution);
+           arXiv:1909.00819 (Auclair et al. — BOS P_n distribution applied
+           to LISA cosmic-string forecasts);
+           arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction
+           pipeline and physics interpretation).
 """
 
+from __future__ import annotations
+
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
-import numpy as np
 import jax.numpy as jnp
+import jax.typing as jtp
+import numpy as np
 
-from gwb_templates import utils as ut
+from gwb_templates.template import NumericalTemplate
 
-# ── Load precomputed data grid ────────────────────────────────────────────────
+ArrayLike: TypeAlias = jtp.ArrayLike
 
-_DATA_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "data",
-    "Model-II_BOS-loggrid.dat",
-)
+_DEFAULT_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-_data_np = np.loadtxt(_DATA_PATH)
-# Row 0, cols 1..  → log10_frequency axis
-# Col 0, rows 1..  → log_Gmu axis
-# Submatrix [1:,1:] → log10(h^2 Omega_GW)
-_gmu_axis = jnp.array(_data_np[1:, 0])  # shape (N_GMU,)
-_freq_axis = jnp.array(_data_np[0, 1:])  # shape (N_FREQ_GRID,)
-_log10_omega = jnp.array(_data_np[1:, 1:])  # shape (N_GMU, N_FREQ_GRID)
 
-_N_GMU = int(_gmu_axis.shape[0])
-_N_FREQ_GRID = int(_freq_axis.shape[0])
+def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """
+    Load the precomputed Model II data grid.
 
-_LOG_GMU_MIN = float(_gmu_axis[0])
-_LOG_GMU_MAX = float(_gmu_axis[-1])
+    Layout of the .dat file:
+      * Row 0, cols 1..  → log10_frequency axis
+      * Col 0, rows 1..  → log_Gmu axis
+      * Submatrix [1:, 1:] → log10(h^2 Omega_GW)
+
+    Returns:
+        (gmu_axis, freq_axis, log10_omega) as JAX arrays.
+    """
+    path = os.path.join(_DATA_DIR, filename)
+    data_np = np.loadtxt(path)
+    gmu_axis = jnp.array(data_np[1:, 0])
+    freq_axis = jnp.array(data_np[0, 1:])
+    log10_omega = jnp.array(data_np[1:, 1:])
+    return gmu_axis, freq_axis, log10_omega
 
 
 # ── JAX bilinear interpolation primitives ────────────────────────────────────
 
 
-def _to_frac_ix(val: float | jax.Array, axis: jax.Array) -> jax.Array:
-    """
-    Convert a physical value to a fractional grid index along ``axis``.
-
-    Args:
-        val: Physical value(s) to convert (scalar or 1-D array).
-        axis: 1-D JAX array of evenly-spaced grid coordinates.
-    Returns:
-        Fractional index (0-based) within the grid.
-    """
+def _to_frac_ix(val: ArrayLike, axis: jax.Array) -> jax.Array:
+    """Convert a physical value to a fractional grid index along ``axis``."""
     n = axis.shape[0]
     return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
 
 
-def _bilinear_corners(ix: jax.Array, iy: jax.Array) -> tuple[jax.Array, ...]:
-    """
-    Compute bilinear corner indices, weights, and grid values.
-
-    Args:
-        ix: Fractional gmu grid index (JAX scalar).
-        iy: Fractional freq grid indices, one per query frequency (1-D JAX array).
-    Returns:
-        Tuple (tx, ty, g00, g01, g10, g11) — all JAX arrays of shape (n_query,).
-    """
-    # ── x (gmu) axis ──────────────────────────────────────────────────────────
+def _bilinear_eval(
+    ix: jax.Array,
+    iy: jax.Array,
+    log10_omega: jax.Array,
+    n_gmu: int,
+    n_freq: int,
+) -> jax.Array:
+    """Bilinear interpolation of log10(h^2 Omega) at fractional indices."""
     kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, _N_GMU - 1.0)).astype(jnp.int32),
+        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
         0,
-        _N_GMU - 2,
+        n_gmu - 2,
     )
     tx = jnp.clip(ix - kx, 0.0, 1.0)
 
-    # ── y (freq) axis ─────────────────────────────────────────────────────────
     ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, _N_FREQ_GRID - 1.0)).astype(jnp.int32),
+        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
         0,
-        _N_FREQ_GRID - 2,
+        n_freq - 2,
     )
     ty = jnp.clip(iy - ky, 0.0, 1.0)
 
-    # ── Corner grid values ────────────────────────────────────────────────────
-    # Dynamic row indexing: _log10_omega[kx] and _log10_omega[kx + 1]
-    row0 = _log10_omega[kx]  # shape (N_FREQ_GRID,)
-    row1 = _log10_omega[kx + 1]  # shape (N_FREQ_GRID,)
+    row0 = log10_omega[kx]
+    row1 = log10_omega[kx + 1]
     g00 = row0[ky]
     g01 = row0[ky + 1]
     g10 = row1[ky]
     g11 = row1[ky + 1]
 
-    return tx, ty, g00, g01, g10, g11
-
-
-def _bilinear_eval(ix: jax.Array, iy: jax.Array) -> jax.Array:
-    """
-    Bilinear interpolation of log10(h^2 Omega) at fractional indices.
-
-    Args:
-        ix: Fractional gmu grid index (JAX scalar).
-        iy: Fractional freq grid indices (1-D JAX array).
-    Returns:
-        Interpolated log10(h^2 * Omega_GW) at each query frequency.
-    """
-    tx, ty, g00, g01, g10, g11 = _bilinear_corners(ix, iy)
     return (
         (1.0 - tx) * (1.0 - ty) * g00
         + tx * (1.0 - ty) * g10
@@ -140,134 +98,351 @@ def _bilinear_eval(ix: jax.Array, iy: jax.Array) -> jax.Array:
     )
 
 
-def _bilinear_dS_dix(ix: jax.Array, iy: jax.Array) -> jax.Array:
-    """
-    Analytical dS/d(ix) for the bilinear interpolation (see module docstring).
+def _bilinear_dS_dix(
+    ix: jax.Array,
+    iy: jax.Array,
+    log10_omega: jax.Array,
+    n_gmu: int,
+    n_freq: int,
+) -> jax.Array:
+    """Analytical dS/d(ix) for the bilinear interpolation."""
+    kx = jnp.clip(
+        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
+        0,
+        n_gmu - 2,
+    )
+    ky = jnp.clip(
+        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
+        0,
+        n_freq - 2,
+    )
+    ty = jnp.clip(iy - ky, 0.0, 1.0)
 
-    Matches JAX's JVP of ``_bilinear_eval`` w.r.t. ix to machine precision.
+    row0 = log10_omega[kx]
+    row1 = log10_omega[kx + 1]
+    g00 = row0[ky]
+    g01 = row0[ky + 1]
+    g10 = row1[ky]
+    g11 = row1[ky + 1]
 
-    Args:
-        ix: Fractional gmu grid index (JAX scalar).
-        iy: Fractional freq grid indices (1-D JAX array).
-    Returns:
-        Derivative of interpolated S w.r.t. ix at each query frequency.
-    """
-    _, ty, g00, g01, g10, g11 = _bilinear_corners(ix, iy)
     return (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
 
 
-# ── Public template functions ─────────────────────────────────────────────────
+# ── Template classes ──────────────────────────────────────────────────────────
 
 
-def cosmic_string_model_ii(freq: np.ndarray, pars: Sequence[float]) -> jax.Array:
-    """
-    Cosmic String Model II (arXiv:1909.00819, BOS P_n).
+class CosmicStringModelII(NumericalTemplate):
+    r"""
+    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`).
 
     1-parameter model evaluated from a precomputed data grid via bilinear
-    interpolation.  The template is JAX-differentiable.
+    interpolation. The template is JAX-differentiable since the interpolation
+    is implemented in pure JAX.
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 Gmu].  Grid range: -18 ≤ log_Gmu ≤ -9.5.
-    Returns:
-        jax.Array of h^2 * Omega_GW at each frequency.
+    Free parameters
+    ---------------
+    log_Gmu
+        :math:`\log_{10}` of the string tension :math:`G\mu`. Grid range
+        :math:`-18 \le \log G\mu \le -9.5`.
     """
-    log_Gmu = pars[0]
-    log10_f = jnp.log10(freq)
-    ix = _to_frac_ix(log_Gmu, _gmu_axis)
-    iy = _to_frac_ix(log10_f, _freq_axis)
-    return 10.0 ** _bilinear_eval(ix, iy)
+
+    jittable: ClassVar[bool] = True
+    differentiation_backend: ClassVar[str] = "autodiff"
+
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Auclair:2019wcv,
+    author = "Auclair, Pierre and others",
+    title = "{Probing the gravitational wave background from cosmic strings with LISA}",
+    eprint = "1909.00819",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2020/04/034",
+    journal = "JCAP",
+    volume = "04",
+    pages = "034",
+    year = "2020"
+}
+""",
+        r"""
+@article{Blanco-Pillado:2024aca,
+    author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
+        Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. and
+        Sousa, Lara and Wachter, Jeremy M.",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from cosmic strings in LISA: reconstruction pipeline
+        and physics interpretation}",
+    eprint = "2405.03740",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-02, CERN-TH-2024-085",
+    doi = "10.1088/1475-7516/2025/05/006",
+    journal = "JCAP",
+    volume = "05",
+    pages = "006",
+    year = "2025"
+}
+""",
+        r"""
+@article{Blanco-Pillado:2013qja,
+    author = "Blanco-Pillado, Jose J. and Olum, Ken D. and Shlaer, Benjamin",
+    title = "{The number of cosmic string loops}",
+    eprint = "1309.6637",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1103/PhysRevD.89.023512",
+    journal = "Phys. Rev. D",
+    volume = "89",
+    number = "2",
+    pages = "023512",
+    year = "2014"
+}
+""",
+    )
+
+    def __init__(
+        self,
+        data_filename: str = _DEFAULT_DATA_FILENAME,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        """
+        Args:
+            data_filename: Filename of the precomputed grid inside the
+                ``cosmic_string_templates/data`` directory.
+        """
+        self.data_filename: str = str(data_filename)
+
+        # setup() will populate these; we need them after super().__init__
+        # to be able to read the grid extrema for defaulting priors. So we
+        # load the grid once eagerly here just to peek at the gmu range.
+        gmu_axis, _, _ = _load_grid(self.data_filename)
+        log_gmu_min = float(gmu_axis[0])
+        log_gmu_max = float(gmu_axis[-1])
+
+        default_labels = {"log_Gmu": r"$\log_{10}(G\mu)$"}
+        default_priors = {"log_Gmu": {"min": log_gmu_min, "max": log_gmu_max}}
+
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label if model_label is not None else "Cosmic String Model II"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
+
+    def setup(self) -> None:
+        """Load the precomputed (log_Gmu, log10_f) grid into JAX arrays."""
+        gmu_axis, freq_axis, log10_omega = _load_grid(self.data_filename)
+        self.gmu_axis: jax.Array = gmu_axis
+        self.freq_axis: jax.Array = freq_axis
+        self.log10_omega: jax.Array = log10_omega
+        self.n_gmu: int = int(gmu_axis.shape[0])
+        self.n_freq_grid: int = int(freq_axis.shape[0])
+
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_Gmu: ArrayLike,
+    ) -> jax.Array:
+        r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+        return 10.0 ** _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
+        log_Gmu = theta[0]
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+
+        S = _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        h2_omega = 10.0**S
+
+        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+
+        grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
+        return grad[..., None]
 
 
-def d1_cosmic_string_model_ii(freq: np.ndarray, pars: Sequence[float]) -> jax.Array:
-    """
-    Analytical first derivative of cosmic_string_model_ii w.r.t. pars.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 Gmu].
-    Returns:
-        jax.Array of shape (len(freq), 1): gradient w.r.t. [log_Gmu].
-    """
-    log_Gmu = pars[0]
-    log10_f = jnp.log10(freq)
-    ix = _to_frac_ix(log_Gmu, _gmu_axis)
-    iy = _to_frac_ix(log10_f, _freq_axis)
-
-    S = _bilinear_eval(ix, iy)
-    h2_omega = 10.0**S
-
-    # d(ix)/d(log_Gmu) = (N_GMU - 1) / (gmu_max - gmu_min)
-    d_ix_d_log_Gmu = (_N_GMU - 1) / (_gmu_axis[-1] - _gmu_axis[0])
-    dS_dix = _bilinear_dS_dix(ix, iy)
-
-    grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
-    return grad[:, None]  # shape (n_freq, 1)
-
-
-cosmic_string_model_ii_model = ut.Signal_model(
-    "cosmic_string_model_ii",
-    cosmic_string_model_ii,
-    dtemplate=d1_cosmic_string_model_ii,
-    model_label="Cosmic String Model II",
-    parameter_names=["log_Gmu"],
-    parameter_labels=[r"$\log_{10}(G\mu)$"],
-    prior={"log_Gmu": {"min": _LOG_GMU_MIN, "max": _LOG_GMU_MAX}},
-)
-
-
-def abelian_higgs_model_ii(freq: np.ndarray, pars: Sequence[float]) -> jax.Array:
-    """
+class AbelianHiggsModelII(NumericalTemplate):
+    r"""
     Abelian Higgs Model II.
 
-    Scales the BOS Model II spectrum by an overall amplitude 10^logf, allowing
-    a continuous interpolation between the Nambu-Goto and Abelian Higgs limits.
+    Scales the BOS Model II spectrum by an overall amplitude
+    :math:`10^{\log_{10} f_{\mathrm{NG}}}`, allowing a continuous
+    interpolation between the Nambu-Goto and Abelian Higgs limits.
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 Gmu, log10 f_NG].
-    Returns:
-        jax.Array of h^2 * Omega_GW at each frequency.
+    Free parameters
+    ---------------
+    log_Gmu
+        :math:`\log_{10}` of the string tension :math:`G\mu`.
+    logf
+        :math:`\log_{10}` of the Nambu-Goto-vs-Abelian-Higgs amplitude
+        scaling :math:`f_{\mathrm{NG}}`.
     """
-    logf = pars[1]
-    return 10.0**logf * cosmic_string_model_ii(freq, pars[:1])
 
+    jittable: ClassVar[bool] = True
+    differentiation_backend: ClassVar[str] = "autodiff"
 
-def d1_abelian_higgs_model_ii(freq: np.ndarray, pars: Sequence[float]) -> jax.Array:
-    """
-    Analytical first derivative of abelian_higgs_model_ii w.r.t. pars.
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Auclair:2019wcv,
+    author = "Auclair, Pierre and others",
+    title = "{Probing the gravitational wave background from cosmic strings with LISA}",
+    eprint = "1909.00819",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2020/04/034",
+    journal = "JCAP",
+    volume = "04",
+    pages = "034",
+    year = "2020"
+}
+""",
+        r"""
+@article{Blanco-Pillado:2024aca,
+    author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
+        Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. and
+        Sousa, Lara and Wachter, Jeremy M.",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from cosmic strings in LISA: reconstruction pipeline
+        and physics interpretation}",
+    eprint = "2405.03740",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-02, CERN-TH-2024-085",
+    doi = "10.1088/1475-7516/2025/05/006",
+    journal = "JCAP",
+    volume = "05",
+    pages = "006",
+    year = "2025"
+}
+""",
+        r"""
+@article{Blanco-Pillado:2013qja,
+    author = "Blanco-Pillado, Jose J. and Olum, Ken D. and Shlaer, Benjamin",
+    title = "{The number of cosmic string loops}",
+    eprint = "1309.6637",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1103/PhysRevD.89.023512",
+    journal = "Phys. Rev. D",
+    volume = "89",
+    number = "2",
+    pages = "023512",
+    year = "2014"
+}
+""",
+    )
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 Gmu, log10 f_NG].
-    Returns:
-        jax.Array of shape (len(freq), 2): gradients w.r.t. [log_Gmu, logf].
-    """
-    logf = pars[1]
+    def __init__(
+        self,
+        data_filename: str = _DEFAULT_DATA_FILENAME,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.data_filename: str = str(data_filename)
 
-    h2_omega_ii = cosmic_string_model_ii(freq, pars[:1])
-    h2_omega_ah = 10.0**logf * h2_omega_ii
+        gmu_axis, _, _ = _load_grid(self.data_filename)
+        log_gmu_min = float(gmu_axis[0])
+        log_gmu_max = float(gmu_axis[-1])
 
-    # d/d(log_Gmu): scale Model II gradient by 10^logf
-    d_d_log_Gmu = 10.0**logf * d1_cosmic_string_model_ii(freq, pars[:1])[:, 0]
-    # d/d(logf): ln(10) * 10^logf * h2_omega_ii = ln(10) * h2_omega_ah
-    d_d_logf = jnp.log(10.0) * h2_omega_ah
+        default_labels = {
+            "log_Gmu": r"$\log_{10}(G\mu)$",
+            "logf": r"$\log_{10}(f_\mathrm{NG})$",
+        }
+        default_priors = {
+            "log_Gmu": {"min": log_gmu_min, "max": log_gmu_max},
+            "logf": {"min": -3.0, "max": 3.0},
+        }
 
-    return jnp.stack([d_d_log_Gmu, d_d_logf], axis=-1)  # shape (n_freq, 2)
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label if model_label is not None else "Abelian Higgs Model II"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
+    def setup(self) -> None:
+        gmu_axis, freq_axis, log10_omega = _load_grid(self.data_filename)
+        self.gmu_axis: jax.Array = gmu_axis
+        self.freq_axis: jax.Array = freq_axis
+        self.log10_omega: jax.Array = log10_omega
+        self.n_gmu: int = int(gmu_axis.shape[0])
+        self.n_freq_grid: int = int(freq_axis.shape[0])
 
-abelian_higgs_model_ii_model = ut.Signal_model(
-    "abelian_higgs_model_ii",
-    abelian_higgs_model_ii,
-    dtemplate=d1_abelian_higgs_model_ii,
-    model_label="Abelian Higgs Model II",
-    parameter_names=["log_Gmu", "logf"],
-    parameter_labels=[
-        r"$\log_{10}(G\mu)$",
-        r"$\log_{10}(f_\mathrm{NG})$",
-    ],
-    prior={
-        "log_Gmu": {"min": _LOG_GMU_MIN, "max": _LOG_GMU_MAX},
-        "logf": {"min": -3.0, "max": 3.0},
-    },
-)
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_Gmu: ArrayLike,
+        logf: ArrayLike,
+    ) -> jax.Array:
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+        spectrum = 10.0 ** _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        return 10.0**logf * spectrum
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: ArrayLike,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
+        log_Gmu = theta[0]
+        logf = theta[1]
+        log10_f = jnp.log10(jnp.asarray(frequency))
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+
+        S = _bilinear_eval(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        h2_omega_ii = 10.0**S
+        h2_omega_ah = 10.0**logf * h2_omega_ii
+
+        # d/d(log_Gmu)
+        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(
+            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
+        )
+        d_d_log_Gmu = (
+            10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
+        )
+        # d/d(logf)
+        d_d_logf = jnp.log(10.0) * h2_omega_ah
+
+        return jnp.stack([d_d_log_Gmu, d_d_logf], axis=-1)

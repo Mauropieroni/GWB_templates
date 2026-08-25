@@ -1,141 +1,249 @@
-"""
+r"""
 Extragalactic compact binary merger foreground template.
 
 Power-law spectrum with the 2/3 spectral index expected from GW emission
 during the inspiral phase of compact binary mergers integrated over redshift.
-Three variants are provided:
-  - ``extragalactic``: 1-parameter model with tilt fixed to 2/3.
-  - ``extragalactic_sobbh_bns``: 2-parameter model with free tilt (log_A + tilt).
-  - ``extragalactic_sobbh_bns_A``: 1-parameter model (log_A, tilt fixed to 2/3).
+
+Two variants are provided:
+
+* :class:`ExtragalacticSobbhBns` — 2-parameter model (log amplitude + tilt).
+* :class:`ExtragalacticSobbhBnsA` — 1-parameter amplitude-only model with
+  tilt fixed at 2/3.
+
+References:
+  arXiv:2304.06368 (Babak et al. — SOBBH SGWB in LISA; the fixed
+  :math:`f^{2/3}` tilt is the standard inspiral-dominated prediction
+  used there).
+  arXiv:1809.10360 (Chen, Huang & Huang — combined BBH + BNS SGWB
+  and implications for LISA).
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
 
-from gwb_templates import utils as ut
+from gwb_templates.template import AnalyticTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
-
-
-# ── Extragalactic SOBBH + BNS (free spectral index) ─────────────────────────
+Array: TypeAlias = jax.Array
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-def extragalactic_sobbh_bns(
-    freq: ArrayLike,
-    pars: ParamLike,
-    ref_freq: float = 1e-3,
-) -> jax.Array:
+class ExtragalacticSobbhBns(AnalyticTemplate):
+    r"""
+    Extragalactic SOBBH+BNS foreground with free spectral index.
+
+    .. math::
+
+        \Omega_{\mathrm{GW}} h^2(f) =
+            10^{\log_{10} A}\,(f / f_{\mathrm{ref}})^{\alpha}
+
+    Free parameters
+    ---------------
+    log_amplitude
+        Base-10 logarithm of the amplitude at the reference frequency.
+    tilt
+        Spectral index.
+
+    Configuration
+    -------------
+    ref_freq
+        Reference frequency (Hz). Defaults to 1 mHz.
     """
-    Extragalactic SOBBH+BNS foreground: Omega(f) = 10^A * (f / f_ref)^tilt.
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 amplitude, tilt].
-        ref_freq: Reference frequency [Hz] (default 1 mHz).
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_A, tilt = pars[0], pars[1]
-    return 10.0**log_A * (jnp.asarray(freq) / ref_freq) ** tilt
+    #: Default reference frequency in Hz.
+    DEFAULT_REF_FREQ: ClassVar[float] = 1e-3
+
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Babak:2023lro,
+    author = "Babak, Stanislav and Caprini, Chiara and Figueroa, Daniel G. and Karnesis,
+        Nikolaos and Marcoccia, Paolo and Nardini, Germano and Pieroni, Mauro and
+        Ricciardone, Angelo and Sesana, Alberto and Torrado, Jes\'us",
+    title = "{Stochastic gravitational wave background from stellar origin binary black
+        holes in LISA}",
+    eprint = "2304.06368",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2023/08/034",
+    journal = "JCAP",
+    volume = "08",
+    pages = "034",
+    year = "2023"
+}
+""",
+        r"""
+@article{Chen:2018rzo,
+    author = "Chen, Zu-Cheng and Huang, Fan and Huang, Qing-Guo",
+    title = "{Stochastic Gravitational-wave Background from Binary Black Holes and
+        Binary Neutron Stars and Implications for LISA}",
+    eprint = "1809.10360",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.3847/1538-4357/aaf581",
+    journal = "Astrophys. J.",
+    volume = "871",
+    number = "1",
+    pages = "97",
+    year = "2019"
+}
+""",
+    )
+
+    def __init__(
+        self,
+        ref_freq: float = DEFAULT_REF_FREQ,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.ref_freq: float = float(ref_freq)
+
+        default_labels = {
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm EG})$",
+            "tilt": r"$\alpha_{\rm EG}$",
+        }
+        default_priors = {
+            "log_amplitude": {"min": -20.0, "max": -5.0},
+            "tilt": {"min": -3.0, "max": 5.0},
+        }
+
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label if model_label is not None else "Extragalactic SOBBH+BNS"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
+
+    def omega_gw_h2(
+        self,
+        frequency: Array,
+        log_amplitude: Array,
+        tilt: Array,
+    ) -> Array:
+        x = jnp.asarray(frequency) / self.ref_freq
+        return 10.0**log_amplitude * x**tilt
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+    ) -> Array:
+        """Analytic Jacobian: columns [log_amplitude, tilt]."""
+        fvec = jnp.asarray(frequency)
+        model = self.omega_gw_h2(fvec, theta[0], theta[1])
+        d_logA = model * jnp.log(10.0)
+        d_tilt = model * jnp.log(fvec / self.ref_freq)
+        return jnp.stack([d_logA, d_tilt], axis=-1)
 
 
-def d1extragalactic_sobbh_bns(
-    freq: ArrayLike,
-    pars: ParamLike,
-    ref_freq: float = 1e-3,
-) -> jax.Array:
-    """
-    Analytical Jacobian of ``extragalactic_sobbh_bns`` w.r.t. pars.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 amplitude, tilt].
-        ref_freq: Reference frequency [Hz] (default 1 mHz).
-    Returns:
-        jax.Array of shape (N_freq, 2):
-            col 0: d/d(log_A) = model * ln(10)
-            col 1: d/d(tilt)  = model * ln(f / f_ref)
-    """
-    fvec = jnp.asarray(freq)
-    model = extragalactic_sobbh_bns(fvec, pars, ref_freq=ref_freq)
-    d_logA = model * jnp.log(10.0)
-    d_tilt = model * jnp.log(fvec / ref_freq)
-    return jnp.stack([d_logA, d_tilt], axis=1)
-
-
-extragalactic_sobbh_bns_model = ut.Signal_model(
-    "extragalactic_sobbh_bns",
-    extragalactic_sobbh_bns,
-    dtemplate=d1extragalactic_sobbh_bns,
-    model_label="Extragalactic SOBBH+BNS",
-    parameter_names=["log_extragalactic_sobbh_bns", "tilt_sobbh_bns"],
-    parameter_labels=[
-        r"$\log_{10}(h^2\,\Omega_{\rm EG})$",
-        r"$\alpha_{\rm EG}$",
-    ],
-    prior={
-        "log_extragalactic_sobbh_bns": {"min": -20.0, "max": -5.0},
-        "tilt_sobbh_bns": {"min": -3.0, "max": 5.0},
-    },
-)
-
-
-# ── Amplitude-only variant (tilt fixed to 2/3) ────────────────────────────────
-
-_TILT_SOBBH_BNS_FID = 2.0 / 3.0
-_FIDUCIAL_TILT_PARS = jnp.array([_TILT_SOBBH_BNS_FID])
-
-
-def extragalactic_sobbh_bns_A(
-    freq: ArrayLike,
-    pars: ParamLike,
-    ref_freq: float = 1e-3,
-) -> jax.Array:
-    """
+class ExtragalacticSobbhBnsA(AnalyticTemplate):
+    r"""
     Extragalactic SOBBH+BNS foreground with tilt fixed to 2/3.
 
-    Free parameter: log10 amplitude only.
-
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 amplitude].
-        ref_freq: Reference frequency [Hz] (default 1 mHz).
-    Returns:
-        jax.Array of shape (N_freq,).
+    Free parameter: ``log_amplitude`` only.
     """
-    full_pars = jnp.concatenate([jnp.atleast_1d(pars[0]), _FIDUCIAL_TILT_PARS])
-    return extragalactic_sobbh_bns(freq, full_pars, ref_freq=ref_freq)
 
+    DEFAULT_REF_FREQ: ClassVar[float] = 1e-3
+    DEFAULT_TILT: ClassVar[float] = 2.0 / 3.0
 
-def d1extragalactic_sobbh_bns_A(
-    freq: ArrayLike,
-    pars: ParamLike,
-    ref_freq: float = 1e-3,
-) -> jax.Array:
-    """
-    Analytical Jacobian of ``extragalactic_sobbh_bns_A`` w.r.t. pars.
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Babak:2023lro,
+    author = "Babak, Stanislav and Caprini, Chiara and Figueroa, Daniel G. and Karnesis,
+        Nikolaos and Marcoccia, Paolo and Nardini, Germano and Pieroni, Mauro and
+        Ricciardone, Angelo and Sesana, Alberto and Torrado, Jes\'us",
+    title = "{Stochastic gravitational wave background from stellar origin binary black
+        holes in LISA}",
+    eprint = "2304.06368",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2023/08/034",
+    journal = "JCAP",
+    volume = "08",
+    pages = "034",
+    year = "2023"
+}
+""",
+        r"""
+@article{Chen:2018rzo,
+    author = "Chen, Zu-Cheng and Huang, Fan and Huang, Qing-Guo",
+    title = "{Stochastic Gravitational-wave Background from Binary Black Holes and
+        Binary Neutron Stars and Implications for LISA}",
+    eprint = "1809.10360",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.3847/1538-4357/aaf581",
+    journal = "Astrophys. J.",
+    volume = "871",
+    number = "1",
+    pages = "97",
+    year = "2019"
+}
+""",
+    )
 
-    Args:
-        freq: Frequency grid [Hz].
-        pars: [log10 amplitude].
-        ref_freq: Reference frequency [Hz] (default 1 mHz).
-    Returns:
-        jax.Array of shape (N_freq, 1): d/d(log_A) only.
-    """
-    full_pars = jnp.concatenate([jnp.atleast_1d(pars[0]), _FIDUCIAL_TILT_PARS])
-    return d1extragalactic_sobbh_bns(freq, full_pars, ref_freq=ref_freq)[:, :1]
+    def __init__(
+        self,
+        ref_freq: float = DEFAULT_REF_FREQ,
+        tilt: float = DEFAULT_TILT,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.ref_freq: float = float(ref_freq)
+        self.tilt: float = float(tilt)
 
+        default_labels = {
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm EG})$",
+        }
+        default_priors = {
+            "log_amplitude": {"min": -20.0, "max": -5.0},
+        }
 
-extragalactic_sobbh_bns_A_model = ut.Signal_model(
-    "extragalactic_sobbh_bns_A",
-    extragalactic_sobbh_bns_A,
-    dtemplate=d1extragalactic_sobbh_bns_A,
-    model_label="Extragalactic SOBBH+BNS (amplitude only)",
-    parameter_names=["log_extragalactic_sobbh_bns"],
-    parameter_labels=[r"$\log_{10}(h^2\,\Omega_{\rm EG})$"],
-    prior={"log_extragalactic_sobbh_bns": {"min": -20.0, "max": -5.0}},
-)
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label
+                if model_label is not None
+                else "Extragalactic SOBBH+BNS (amplitude only)"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
+
+    def omega_gw_h2(
+        self,
+        frequency: Array,
+        log_amplitude: Array,
+    ) -> Array:
+        x = jnp.asarray(frequency) / self.ref_freq
+        return 10.0**log_amplitude * x**self.tilt
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: Array,
+        theta: Array,
+    ) -> Array:
+        """Analytic Jacobian: single column d/d(log_amplitude)."""
+        model = self.omega_gw_h2(jnp.asarray(frequency), theta[0])
+        d_logA = model * jnp.log(10.0)
+        return d_logA[..., None]

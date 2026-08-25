@@ -1,140 +1,203 @@
-"""
+r"""
 Double broken power-law with frequency-ratio reparametrisation (8 parameters).
 
-Variant of ``double_broken_power_law`` where ``log_f_1`` is replaced by
-``log_r_f = log10(f_2 / f_1)``.  This reparametrisation decouples the overall
-frequency scale from the internal frequency ratio, which can improve sampling
-efficiency when the ratio is well-constrained by the physics.
+Variant of :class:`DoubleBrokenPowerLaw` where ``log_f_1`` is replaced by
+:math:`\log_{10}(f_2/f_1)`. This reparametrisation decouples the overall
+frequency scale from the internal frequency ratio, which can improve
+sampling efficiency when the ratio is well-constrained by the physics.
 
-Reference: arXiv:2403.03723 (GW from FOPT in LISA: reconstruction pipeline
-and physics interpretation).
+Reference: arXiv:2403.03723.
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
 
-from gwb_templates import utils as ut
 from gwb_templates.generic_templates.double_broken_power_law import (
-    double_broken_power_law,
-    d1double_broken_power_law,
+    DoubleBrokenPowerLaw,
 )
+from gwb_templates.template import AnalyticTemplate
 
-ParamLike = jax.Array | Sequence[float]
-ArrayLike = jtp.ArrayLike
-
-jax.config.update("jax_enable_x64", True)
+ArrayLike: TypeAlias = jtp.ArrayLike
 
 
-def double_broken_power_law_rf(freq: ArrayLike, pars: ParamLike) -> jax.Array:
+class DoubleBrokenPowerLawRf(AnalyticTemplate):
+    r"""
+    Double broken power law reparameterised with a frequency ratio.
+
+    Identical to :class:`DoubleBrokenPowerLaw` but replaces ``log_f_1``
+    with :math:`\log r_f = \log_{10}(f_2 / f_1)`, so that
+    :math:`\log f_1 = \log f_2 - \log r_f`.
+
+    Free parameters
+    ---------------
+    log_amplitude
+        :math:`\log_{10}` amplitude at :math:`f_2`.
+    log_f_2
+        :math:`\log_{10}` of the second break frequency in Hz.
+    log_r_f
+        :math:`\log_{10}(f_2/f_1)`.
+    n_1, n_2, n_3
+        Spectral indices in the three regimes.
+    a_1, a_2
+        Smoothness parameters at the two breaks.
     """
-    Double broken power law reparameterised with a frequency ratio (8 parameters).
 
-    Identical to ``double_broken_power_law`` but replaces ``log_f_1`` with
-    ``log_r_f = log10(f_2 / f_1)``, so that ``log_f_1 = log_f_2 - log_r_f``.
-
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude at f_2, log10 f_2, log10(f_2/f_1),
-               n_1, n_2, n_3, a_1, a_2].
-    Returns:
-        jax.Array of shape (N_freq,).
-    """
-    log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2 = (
-        pars[0],
-        pars[1],
-        pars[2],
-        pars[3],
-        pars[4],
-        pars[5],
-        pars[6],
-        pars[7],
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Caprini:2024hue,
+    author = "Caprini, Chiara and Jinno, Ryusuke and Lewicki, Marek and Madge, Eric and
+        Merchand, Marco and Nardini, Germano and Pieroni, Mauro and Roper Pol, Alberto
+        and Vaskonen, Ville",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from first-order phase transitions in LISA:
+        reconstruction pipeline and physics interpretation}",
+    eprint = "2403.03723",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-01, CERN-TH-2024-029",
+    doi = "10.1088/1475-7516/2024/10/020",
+    journal = "JCAP",
+    volume = "10",
+    pages = "020",
+    year = "2024"
+}
+""",
     )
-    log_f_1 = log_f_2 - log_r_f
-    return double_broken_power_law(
-        freq,
-        jnp.array([log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2]),
-    )
 
+    def __init__(
+        self,
+        *,
+        model_name: str | None = None,
+        model_label: str | None = None,
+        parameter_labels: Mapping[str, str] | None = None,
+        prior_by_param: Mapping[str, Any] | None = None,
+    ) -> None:
+        # Underlying single-DBPL helper used to delegate the analytic
+        # gradient via the chain rule.
+        self._dbpl = DoubleBrokenPowerLaw()
 
-def d1double_broken_power_law_rf(freq: ArrayLike, pars: ParamLike) -> jax.Array:
-    """
-    Analytical Jacobian of ``double_broken_power_law_rf`` w.r.t. pars.
+        default_labels = {
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+            "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
+            "log_r_f": r"$\log_{10}(f_2/f_1)$",
+            "n_1": r"$n_1$",
+            "n_2": r"$n_2$",
+            "n_3": r"$n_3$",
+            "a_1": r"$a_1$",
+            "a_2": r"$a_2$",
+        }
+        default_priors = {
+            "log_amplitude": {
+                "prior_type": "uniform",
+                "minimum": -20.0,
+                "maximum": -1.0,
+            },
+            "log_f_2": {
+                "prior_type": "uniform",
+                "minimum": -10.0,
+                "maximum": 0.0,
+            },
+            "log_r_f": {
+                "prior_type": "uniform",
+                "minimum": -3.0,
+                "maximum": 3.0,
+            },
+            "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+            "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+            "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+            "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+            "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+        }
 
-    Since log_f_1 = log_f_2 - log_r_f, the chain rule gives:
-        d/d(log_f_2)  = DBPL[1] + DBPL[2]   (∂f_1/∂f_2=1, ∂f_2/∂f_2=1)
-        d/d(log_r_f)  = -DBPL[1]             (∂f_1/∂r_f=-1)
-    All other columns are taken directly from d1double_broken_power_law.
+        super().__init__(
+            model_name=model_name,
+            model_label=(
+                model_label
+                if model_label is not None
+                else "Double Broken Power Law (ratio freq.)"
+            ),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else default_labels
+            ),
+            prior_by_param=(
+                prior_by_param if prior_by_param is not None else default_priors
+            ),
+        )
 
-    Args:
-        freq: Frequency grid.
-        pars: [log10 amplitude at f_2, log10 f_2, log10(f_2/f_1),
-               n_1, n_2, n_3, a_1, a_2].
-    Returns:
-        jax.Array of shape (N_freq, 8).
-    """
-    log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2 = (
-        pars[0],
-        pars[1],
-        pars[2],
-        pars[3],
-        pars[4],
-        pars[5],
-        pars[6],
-        pars[7],
-    )
-    log_f_1 = log_f_2 - log_r_f
-    pars_dbpl = jnp.array([log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2])
-    J = d1double_broken_power_law(freq, pars_dbpl)
+    def omega_gw_h2(
+        self,
+        frequency: ArrayLike,
+        log_amplitude: ArrayLike,
+        log_f_2: ArrayLike,
+        log_r_f: ArrayLike,
+        n_1: ArrayLike,
+        n_2: ArrayLike,
+        n_3: ArrayLike,
+        a_1: ArrayLike,
+        a_2: ArrayLike,
+    ) -> jax.Array:
+        r"""
+        Evaluate the frequency-ratio reparametrised DBPL at ``frequency``.
+        """
+        log_f_1 = log_f_2 - log_r_f
+        amplitude = 10.0**log_amplitude
+        ratio = 10.0 ** (log_f_1 - log_f_2)  # f_1 / f_2
+        x_1 = frequency / 10.0**log_f_1
+        x_2 = frequency / 10.0**log_f_2
 
-    # J columns: [logA, logf1, logf2, n1, n2, n3, a1, a2]
-    d_logA = J[:, 0]
-    d_logf2 = J[:, 1] + J[:, 2]  # chain rule
-    d_logrf = -J[:, 1]  # chain rule
-    d_n1 = J[:, 3]
-    d_n2 = J[:, 4]
-    d_n3 = J[:, 5]
-    d_a1 = J[:, 6]
-    d_a2 = J[:, 7]
+        norm = (
+            ratio**n_1
+            * (1.0 + ratio ** (-a_1)) ** ((n_1 - n_2) / a_1)
+            * 2.0 ** ((n_2 - n_3) / a_2)
+        )
 
-    return jnp.stack([d_logA, d_logf2, d_logrf, d_n1, d_n2, d_n3, d_a1, d_a2], axis=1)
+        return (
+            norm
+            * amplitude
+            * x_1**n_1
+            * (1.0 + x_1**a_1) ** ((n_2 - n_1) / a_1)
+            * (1.0 + x_2**a_2) ** ((n_3 - n_2) / a_2)
+        )
 
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""
+        Analytic Jacobian via the chain rule from
+        :class:`DoubleBrokenPowerLaw`.
 
-double_broken_power_law_rf_model = ut.Signal_model(
-    "double_broken_power_law_rf",
-    double_broken_power_law_rf,
-    dtemplate=d1double_broken_power_law_rf,
-    model_label="Double Broken Power Law (ratio freq.)",
-    parameter_names=[
-        "log_amplitude",
-        "log_f_2",
-        "log_r_f",
-        "n_1",
-        "n_2",
-        "n_3",
-        "a_1",
-        "a_2",
-    ],
-    parameter_labels=[
-        r"$\log_{10}(h^2\,\Omega_*)$",
-        r"$\log_{10}(f_2/\mathrm{Hz})$",
-        r"$\log_{10}(f_2/f_1)$",
-        r"$n_1$",
-        r"$n_2$",
-        r"$n_3$",
-        r"$a_1$",
-        r"$a_2$",
-    ],
-    prior={
-        "log_amplitude": {"prior_type": "uniform", "minimum": -20.0, "maximum": -1.0},
-        "log_f_2": {"prior_type": "uniform", "minimum": -10.0, "maximum": 0.0},
-        "log_r_f": {"prior_type": "uniform", "minimum": -3.0, "maximum": 3.0},
-        "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-        "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-        "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-        "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-        "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-    },
-)
+        Since :math:`\log f_1 = \log f_2 - \log r_f`,
+
+        - :math:`\partial/\partial(\log f_2) = J_{\log f_1} + J_{\log f_2}`
+        - :math:`\partial/\partial(\log r_f) = -J_{\log f_1}`
+
+        All other columns pass through unchanged.
+        """
+        log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2 = theta
+        log_f_1 = log_f_2 - log_r_f
+        theta_dbpl = jnp.stack(
+            [log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2]
+        )
+        # J columns: [logA, logf1, logf2, n1, n2, n3, a1, a2]
+        J = self._dbpl._grad_theta_omega_gw_h2_analytical(frequency, theta_dbpl)
+
+        d_logA = J[..., 0]
+        d_logf2 = J[..., 1] + J[..., 2]  # chain rule
+        d_logrf = -J[..., 1]  # chain rule
+        d_n1 = J[..., 3]
+        d_n2 = J[..., 4]
+        d_n3 = J[..., 5]
+        d_a1 = J[..., 6]
+        d_a2 = J[..., 7]
+
+        return jnp.stack(
+            [d_logA, d_logf2, d_logrf, d_n1, d_n2, d_n3, d_a1, d_a2], axis=-1
+        )
