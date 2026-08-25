@@ -33,7 +33,16 @@ For development (includes linting and testing tools):
 pip install -e ".[dev]"
 ```
 
-**Dependencies:** `jax>=0.4`, `numpy>=1.21`, `scipy>=1.7`, `interpax>=0.1.0`
+The scalar-induced SIGWAY templates are an optional extra (needs a JAX new enough
+for `jax.scipy.special.sici`); without it, `import gwb_templates` still works and
+those templates simply don't register:
+
+```bash
+pip install -e ".[sigway]"
+```
+
+**Dependencies:** `jax>=0.5.0`, `numpy>=1.21`, `scipy>=1.7`, `interpax>=0.1.0`
+(`sigway` extra: `sigway`, `jax>=0.8.0`, `diffrax`, `interpax`)
 
 ---
 
@@ -69,19 +78,19 @@ mixed = model.d2_df_dtheta_omega_gw_h2(freq, theta)
 
 ### Public attributes & methods on every `Template`
 
-| Member | Description |
-| --- | --- |
-| `omega_gw_h2(freq, *params, **cfg)` | Direct call with parameters spread positionally. Subclasses implement this. |
-| `omega_gw_h2_from_parameters(freq, theta)` | Public entry point; accepts a parameter vector or `{name: value}` mapping. |
-| `grad_theta_omega_gw_h2(freq, theta)` | Jacobian w.r.t. parameters. Prefers a class-supplied analytic override, else falls back to the declared backend. |
-| `hess_theta_omega_gw_h2(freq, theta)` | Hessian w.r.t. parameters. |
-| `d_df_omega_gw_h2`, `d2_df2_omega_gw_h2`, `d2_df_dtheta_omega_gw_h2` | Frequency derivatives and the mixed derivative. |
-| `parameter_names` | Tuple of free-parameter names (inferred from `omega_gw_h2` signature). |
-| `parameter_labels` | Read-only mapping `{name: LaTeX label}`. |
-| `prior_by_param` | Read-only mapping `{name: prior dict}`. |
-| `model_type` / `model_name` / `model_label` / `model_id` | Identity strings. |
-| `bibtex_entries` | ClassVar tuple of raw BibTeX strings; access joined via `get_bibtex()`. |
-| `jittable` / `differentiation_backend` | ClassVars declaring whether `omega_gw_h2` is JIT-safe and which backend the dispatcher uses when no analytic override is present (`"autodiff"` or `"finite_difference"`). |
+| Member                                                                     | Description                                                                                                                                                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `omega_gw_h2(freq, *params, **cfg)`                                      | Direct call with parameters spread positionally. Subclasses implement this.                                                                                                    |
+| `omega_gw_h2_from_parameters(freq, theta)`                               | Public entry point; accepts a parameter vector or`{name: value}` mapping.                                                                                                    |
+| `grad_theta_omega_gw_h2(freq, theta)`                                    | Jacobian w.r.t. parameters. Prefers a class-supplied analytic override, else falls back to the declared backend.                                                               |
+| `hess_theta_omega_gw_h2(freq, theta)`                                    | Hessian w.r.t. parameters.                                                                                                                                                     |
+| `d_df_omega_gw_h2`, `d2_df2_omega_gw_h2`, `d2_df_dtheta_omega_gw_h2` | Frequency derivatives and the mixed derivative.                                                                                                                                |
+| `parameter_names`                                                        | Tuple of free-parameter names (inferred from`omega_gw_h2` signature).                                                                                                        |
+| `parameter_labels`                                                       | Read-only mapping`{name: LaTeX label}`.                                                                                                                                      |
+| `prior_by_param`                                                         | Read-only mapping`{name: prior dict}`.                                                                                                                                       |
+| `model_type` / `model_name` / `model_label` / `model_id`           | Identity strings.                                                                                                                                                              |
+| `bibtex_entries`                                                         | ClassVar tuple of raw BibTeX strings; access joined via`get_bibtex()`.                                                                                                       |
+| `jittable` / `differentiation_backend`                                 | ClassVars declaring whether`omega_gw_h2` is JIT-safe and which backend the dispatcher uses when no analytic override is present (`"autodiff"` or `"finite_difference"`). |
 
 ---
 
@@ -130,60 +139,60 @@ All templates listed below are class names (also their registry keys). The full 
 
 ### Generic
 
-| Class | Parameters | Description |
-| --- | --- | --- |
-| `Amplitude` | `log_amplitude` | Flat amplitude |
-| `PowerLaw` | `log_amplitude, tilt` | Power law |
-| `LognormalBump` | `log_amplitude, log_pivot, log_width` | Log-normal bump |
-| `BrokenPowerLaw` | `log_amplitude, log_pivot, tilt_1, tilt_2, log_transition` | Broken power law with free smoothness |
-| `BrokenPowerLawFixedSmoothness` | `log_amplitude, log_pivot, tilt_1, tilt_2` | Broken power law, fixed smoothness |
-| `BrokenPowerLawA1` | `log_amplitude, log_f_b, n_1, n_2, a_1` | Smooth broken power law in `a_1` parametrization |
-| `DoubleBrokenPowerLaw` | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2` | Double broken power law |
-| `DoubleBrokenPowerLawRf` | `log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2` | Reparametrization of DBPL (ratio of break frequencies) |
-| `TwoDoubleBrokenPowerLaws` | 16 params | Sum of two double broken power laws |
+| Class                             | Parameters                                                   | Description                                            |
+| --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------ |
+| `Amplitude`                     | `log_amplitude`                                            | Flat amplitude                                         |
+| `PowerLaw`                      | `log_amplitude, tilt`                                      | Power law                                              |
+| `LognormalBump`                 | `log_amplitude, log_pivot, log_width`                      | Log-normal bump                                        |
+| `BrokenPowerLaw`                | `log_amplitude, log_pivot, tilt_1, tilt_2, log_transition` | Broken power law with free smoothness                  |
+| `BrokenPowerLawFixedSmoothness` | `log_amplitude, log_pivot, tilt_1, tilt_2`                 | Broken power law, fixed smoothness                     |
+| `BrokenPowerLawA1`              | `log_amplitude, log_f_b, n_1, n_2, a_1`                    | Smooth broken power law in`a_1` parametrization      |
+| `DoubleBrokenPowerLaw`          | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2` | Double broken power law                                |
+| `DoubleBrokenPowerLawRf`        | `log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2` | Reparametrization of DBPL (ratio of break frequencies) |
+| `TwoDoubleBrokenPowerLaws`      | 16 params                                                    | Sum of two double broken power laws                    |
 
 ### First-order phase transitions
 
-| Class | Parameters | Description |
-| --- | --- | --- |
-| `FoptBrokenPowerLaw` | `log_amplitude, log_f_star, n_IR, n_UV` | FOPT broken power law |
-| `FoptBrokenPowerLawOld` | `log_amplitude, log_pivot` | Legacy 2-param FOPT BPL |
-| `PtSoundWaves` | `log_K, log_R_H_star, xi_w, log_T_star` | Sound-wave contribution |
-| `PtTurbulence` | `log_Omega_s, log_R_H_star, log_T_star` | Turbulence contribution |
-| `PtCollision` | `log_K_tilde, log_beta_over_H, log_T_star` | Bubble-collision contribution |
-| `PtPlasma` | `log_K, log_R_H_star, xi_w, log_T_star, epsilon` | Plasma — composes `PtSoundWaves + PtTurbulence` |
+| Class                     | Parameters                                         | Description                                       |
+| ------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| `FoptBrokenPowerLaw`    | `log_amplitude, log_f_star, n_IR, n_UV`          | FOPT broken power law                             |
+| `FoptBrokenPowerLawOld` | `log_amplitude, log_pivot`                       | Legacy 2-param FOPT BPL                           |
+| `PtSoundWaves`          | `log_K, log_R_H_star, xi_w, log_T_star`          | Sound-wave contribution                           |
+| `PtTurbulence`          | `log_Omega_s, log_R_H_star, log_T_star`          | Turbulence contribution                           |
+| `PtCollision`           | `log_K_tilde, log_beta_over_H, log_T_star`       | Bubble-collision contribution                     |
+| `PtPlasma`              | `log_K, log_R_H_star, xi_w, log_T_star, epsilon` | Plasma — composes`PtSoundWaves + PtTurbulence` |
 
 ### Inflation
 
-| Class | Parameters | Description |
-| --- | --- | --- |
-| `DoublePeak` | `log_amplitude, log_pivot, beta, k1, k2, rho, gamma` | Double log-normal peak |
-| `DoublePeakSharp` | 10 params | `DoublePeak` envelope × sharp-feature modulation |
-| `DoublePeakSharpLog` | 10 params | `DoublePeakSharp` with log-parametrized sharp triple |
-| `ExcitedStates` | `log_amplitude, log_gamma_ES, log_omega_ES` | Excited initial states |
-| `LognormalBumpSharp` | 6 params | `LognormalBump` × sharp-feature modulation |
-| `LognormalBumpSharpLog` | 6 params | `LognormalBumpSharp` with log-parametrized sharp triple |
-| `SharpFeature` | `A_sharp, omega_sharp_Hz, phase_sharp` | Sharp-feature oscillatory template (arXiv:2407.04356) |
-| `SharpFeatureLog` | log-space params | Log-parametrized `SharpFeature` |
-| `ResonantFeature` | `A_resonant, omega_resonant, phase_resonant` | Resonant-feature oscillatory template (arXiv:1002.0833, 2407.04356). `NumericalTemplate`; loads `data/Resonant_coefficients.npz` |
-| `ResonantFeatureLog` | log-space params | Log-parametrized `ResonantFeature` |
-| `FlatResonant` | `log_amplitude, A_resonant, omega_resonant, phase_resonant` | Flat amplitude with resonant modulation |
-| `FlatResonantLog` | log-space params | Log-parametrized `FlatResonant` |
+| Class                     | Parameters                                                    | Description                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `DoublePeak`            | `log_amplitude, log_pivot, beta, k1, k2, rho, gamma`        | Double log-normal peak                                                                                                              |
+| `DoublePeakSharp`       | 10 params                                                     | `DoublePeak` envelope × sharp-feature modulation                                                                                 |
+| `DoublePeakSharpLog`    | 10 params                                                     | `DoublePeakSharp` with log-parametrized sharp triple                                                                              |
+| `ExcitedStates`         | `log_amplitude, log_gamma_ES, log_omega_ES`                 | Excited initial states                                                                                                              |
+| `LognormalBumpSharp`    | 6 params                                                      | `LognormalBump` × sharp-feature modulation                                                                                       |
+| `LognormalBumpSharpLog` | 6 params                                                      | `LognormalBumpSharp` with log-parametrized sharp triple                                                                           |
+| `SharpFeature`          | `A_sharp, omega_sharp_Hz, phase_sharp`                      | Sharp-feature oscillatory template (arXiv:2407.04356)                                                                               |
+| `SharpFeatureLog`       | log-space params                                              | Log-parametrized`SharpFeature`                                                                                                    |
+| `ResonantFeature`       | `A_resonant, omega_resonant, phase_resonant`                | Resonant-feature oscillatory template (arXiv:1002.0833, 2407.04356).`NumericalTemplate`; loads `data/Resonant_coefficients.npz` |
+| `ResonantFeatureLog`    | log-space params                                              | Log-parametrized`ResonantFeature`                                                                                                 |
+| `FlatResonant`          | `log_amplitude, A_resonant, omega_resonant, phase_resonant` | Flat amplitude with resonant modulation                                                                                             |
+| `FlatResonantLog`       | log-space params                                              | Log-parametrized`FlatResonant`                                                                                                    |
 
 ### Astrophysical foregrounds
 
-| Class | Parameters | Description |
-| --- | --- | --- |
-| `GalacticBinaries` | `log_amplitude, alpha, log_fr1, log_frk, log_fr2` | Galactic binary confusion noise (Karnesis 2021) |
-| `GalacticBinariesA` | `log_amplitude` | Amplitude-only variant; fiducial shape from `galactic_pars(Tobs_yrs, snr, links)` |
-| `GalacticBinariesOld` | `log_amplitude, alpha, beta, kappa, gamma, fk` | Legacy galactic-binary template (Robson, Cornish & Liu 2019) |
-| `GalacticBinariesOldA` | `log_amplitude` | Amplitude-only legacy variant |
-| `ExtragalacticSobbhBns` | `log_amplitude, tilt` | Stellar-origin BBH + BNS foreground (arXiv:2304.06368) |
-| `ExtragalacticSobbhBnsA` | `log_amplitude` | Amplitude-only variant |
-| `ExtragalacticWd` | `log_amplitude, f_knee, delta, alpha1, alpha2` | Extragalactic WD foreground, single-knee broken PL |
-| `ExtragalacticWdA` | `log_amplitude` | Amplitude-only variant |
-| `ExtragalacticWd2` | `log_amplitude, f_low, f_high, alpha_low, alpha_high` | Extragalactic WD foreground, double-knee broken PL |
-| `ExtragalacticWd2A` | `log_amplitude` | Amplitude-only variant |
+| Class                      | Parameters                                              | Description                                                                        |
+| -------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `GalacticBinaries`       | `log_amplitude, alpha, log_fr1, log_frk, log_fr2`     | Galactic binary confusion noise (Karnesis 2021)                                    |
+| `GalacticBinariesA`      | `log_amplitude`                                       | Amplitude-only variant; fiducial shape from`galactic_pars(Tobs_yrs, snr, links)` |
+| `GalacticBinariesOld`    | `log_amplitude, alpha, beta, kappa, gamma, fk`        | Legacy galactic-binary template (Robson, Cornish & Liu 2019)                       |
+| `GalacticBinariesOldA`   | `log_amplitude`                                       | Amplitude-only legacy variant                                                      |
+| `ExtragalacticSobbhBns`  | `log_amplitude, tilt`                                 | Stellar-origin BBH + BNS foreground (arXiv:2304.06368)                             |
+| `ExtragalacticSobbhBnsA` | `log_amplitude`                                       | Amplitude-only variant                                                             |
+| `ExtragalacticWd`        | `log_amplitude, f_knee, delta, alpha1, alpha2`        | Extragalactic WD foreground, single-knee broken PL                                 |
+| `ExtragalacticWdA`       | `log_amplitude`                                       | Amplitude-only variant                                                             |
+| `ExtragalacticWd2`       | `log_amplitude, f_low, f_high, alpha_low, alpha_high` | Extragalactic WD foreground, double-knee broken PL                                 |
+| `ExtragalacticWd2A`      | `log_amplitude`                                       | Amplitude-only variant                                                             |
 
 ### Cosmic strings
 
@@ -192,14 +201,28 @@ from `AnalyticTemplate`; the Model II family inherits from `NumericalTemplate` b
 overrides `jittable=True` and `differentiation_backend="autodiff"`. All six are
 pure JAX, jittable, and autodiff-differentiable.
 
-| Class | Parameters | Description |
-| --- | --- | --- |
-| `CosmicStringModelI` | `log_Gmu, log_alpha, q` | Nambu-Goto Model I — Euler-Maclaurin summation, JAX hyp2f1 (autodiff backend, jittable) |
-| `CosmicStringModelIEdf` | `log_Gmu, log_alpha, q, log_T_Extra, Dg_Extra` | Model I with extra BSM DOFs (autodiff backend, jittable) |
-| `CosmicStringModelIEos` | `log_Gmu, log_alpha, q, logtemp_GeV, eos` | Model I with equation-of-state correction (autodiff backend, jittable) |
-| `CosmicStringModelII` | `log_Gmu` | Model II — precomputed grid `data/Model-II_BOS-loggrid.dat`, JAX bilinear interpolation (autodiff backend, jittable) |
-| `CosmicStringModelIIDof` | `log_Gmu, log_T_delta, delta_g` | Model II with non-SM DOF changes — precomputed 4D grid `data/DOF-Model-II_BOS-arrays.npz`, JAX quadrilinear interpolation (autodiff backend, jittable) |
-| `AbelianHiggsModelII` | `log_Gmu, logf` | Abelian-Higgs amplitude-scaled wrapper around Model II |
+| Class                      | Parameters                                       | Description                                                                                                                                              |
+| -------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CosmicStringModelI`     | `log_Gmu, log_alpha, q`                        | Nambu-Goto Model I — Euler-Maclaurin summation, JAX hyp2f1 (autodiff backend, jittable)                                                                 |
+| `CosmicStringModelIEdf`  | `log_Gmu, log_alpha, q, log_T_Extra, Dg_Extra` | Model I with extra BSM DOFs (autodiff backend, jittable)                                                                                                 |
+| `CosmicStringModelIEos`  | `log_Gmu, log_alpha, q, logtemp_GeV, eos`      | Model I with equation-of-state correction (autodiff backend, jittable)                                                                                   |
+| `CosmicStringModelII`    | `log_Gmu`                                      | Model II — precomputed grid`data/Model-II_BOS-loggrid.dat`, JAX bilinear interpolation (autodiff backend, jittable)                                   |
+| `CosmicStringModelIIDof` | `log_Gmu, log_T_delta, delta_g`                | Model II with non-SM DOF changes — precomputed 4D grid`data/DOF-Model-II_BOS-arrays.npz`, JAX quadrilinear interpolation (autodiff backend, jittable) |
+| `AbelianHiggsModelII`    | `log_Gmu, logf`                                | Abelian-Higgs amplitude-scaled wrapper around Model II                                                                                                   |
+
+### Scalar-induced (SIGWAY, optional extra)
+
+Only register if the `sigway` extra is installed (`SIGWAY_AVAILABLE`); each wraps a
+`sigway.spectrum.OmegaGW` model built from a source-perturbation shape plus a
+radiation- or EMD-domination kernel. See arXiv:2501.11320 for the configurations.
+
+| Class                            | Parameters                           | Description                                                                                                                           |
+| -------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `SIGWAYLognormal`              | `logAs, logDelta, logks`           | Log-normal-peak source spectrum (radiation domination)                                                                                |
+| `SIGWAYBrokenPowerLaw`         | `logA, alpha, beta, gamma, logks`  | Broken-power-law-peak source spectrum (radiation domination)                                                                          |
+| `SIGWAYMultifieldOscillations` | `log10A, log10ks, delta, eta_L, F` | Oscillatory-feature source spectrum (radiation domination)                                                                            |
+| `SIGWAYEarlyMatterDomination`  | `As, kmax, etaR`                   | Flat source with sharp UV cutoff, instant EMD→RD kernel                                                                              |
+| `SIGWAYSingleFieldUSR`         | `a, lam, v, nfac`                  | Ultra-slow-roll single-field spectrum from a Mukhanov-Sasaki solve (fixed quasi-inflection-point potential; FD backend, not jittable) |
 
 ---
 
@@ -215,7 +238,8 @@ src/gwb_templates/
 ├── FOPT_templates/                   # FOPT broken power laws and PT contributions
 ├── inflation_templates/              # Sharp / resonant / double-peak templates
 ├── astrophysical_templates/          # Galactic + extragalactic foregrounds
-└── cosmic_string_templates/          # Model I / Edf / Eos / II / IIDof + AbelianHiggs (with data/)
+├── cosmic_string_templates/          # Model I / Edf / Eos / II / IIDof + AbelianHiggs (with data/)
+└── scalar_induced_templates/         # ScalarInducedTemplate base + sigway/ (optional extra)
 ```
 
 ---
@@ -232,4 +256,4 @@ pytest
 
 ## License
 
-MIT © Mauro Pieroni
+GPL-3.0 © Mauro Pieroni

@@ -180,7 +180,7 @@ class CosmicStringModelIEos(AnalyticTemplate):
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
-    @article{Blanco-Pillado:2024aca,
+@article{Blanco-Pillado:2024aca,
     author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
         Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. and
         Sousa, Lara and Wachter, Jeremy M.",
@@ -196,8 +196,8 @@ class CosmicStringModelIEos(AnalyticTemplate):
     volume = "05",
     pages = "006",
     year = "2025"
-    }
-    """,
+}
+""",
     )
 
     def __init__(
