@@ -85,8 +85,25 @@ class GalacticBinaries(AnalyticTemplate):
         :math:`\log_{10} f_{r2}` (Hz). Width of the ``tanh`` cutoff.
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Karnesis:2021tsh,
+    author = "Karnesis, Nikolaos and Babak, Stanislav and Pieroni, Mauro and Cornish,
+        Neil and Littenberg, Tyson",
+    title = "{Characterization of the stochastic signal originating from compact binary
+        populations as measured by LISA}",
+    eprint = "2103.14598",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.IM",
+    doi = "10.1103/PhysRevD.104.043019",
+    journal = "Phys. Rev. D",
+    volume = "104",
+    number = "4",
+    pages = "043019",
+    year = "2021"
+}
+""",
+    )
 
     def __init__(
         self,
@@ -184,8 +201,25 @@ class GalacticBinariesA(AnalyticTemplate):
     constructor kwargs.
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Karnesis:2021tsh,
+    author = "Karnesis, Nikolaos and Babak, Stanislav and Pieroni, Mauro and Cornish,
+        Neil and Littenberg, Tyson",
+    title = "{Characterization of the stochastic signal originating from compact binary
+        populations as measured by LISA}",
+    eprint = "2103.14598",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.IM",
+    doi = "10.1103/PhysRevD.104.043019",
+    journal = "Phys. Rev. D",
+    volume = "104",
+    number = "4",
+    pages = "043019",
+    year = "2021"
+}
+""",
+    )
 
     def __init__(
         self,

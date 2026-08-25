@@ -48,8 +48,27 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
         Smoothness parameters at the two breaks.
     """
 
-    #: TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Caprini:2024hue,
+    author = "Caprini, Chiara and Jinno, Ryusuke and Lewicki, Marek and Madge, Eric and
+        Merchand, Marco and Nardini, Germano and Pieroni, Mauro and Roper Pol, Alberto
+        and Vaskonen, Ville",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from first-order phase transitions in LISA:
+        reconstruction pipeline and physics interpretation}",
+    eprint = "2403.03723",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-01, CERN-TH-2024-029",
+    doi = "10.1088/1475-7516/2024/10/020",
+    journal = "JCAP",
+    volume = "10",
+    pages = "020",
+    year = "2024"
+}
+""",
+    )
 
     def __init__(
         self,

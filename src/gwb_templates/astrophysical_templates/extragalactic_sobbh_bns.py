@@ -9,6 +9,13 @@ Two variants are provided:
 * :class:`ExtragalacticSobbhBns` — 2-parameter model (log amplitude + tilt).
 * :class:`ExtragalacticSobbhBnsA` — 1-parameter amplitude-only model with
   tilt fixed at 2/3.
+
+References:
+  arXiv:2304.06368 (Babak et al. — SOBBH SGWB in LISA; the fixed
+  :math:`f^{2/3}` tilt is the standard inspiral-dominated prediction
+  used there).
+  arXiv:1809.10360 (Chen, Huang & Huang — combined BBH + BNS SGWB
+  and implications for LISA).
 """
 
 from __future__ import annotations
@@ -51,8 +58,41 @@ class ExtragalacticSobbhBns(AnalyticTemplate):
     #: Default reference frequency in Hz.
     DEFAULT_REF_FREQ: ClassVar[float] = 1e-3
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Babak:2023lro,
+    author = "Babak, Stanislav and Caprini, Chiara and Figueroa, Daniel G. and Karnesis,
+        Nikolaos and Marcoccia, Paolo and Nardini, Germano and Pieroni, Mauro and
+        Ricciardone, Angelo and Sesana, Alberto and Torrado, Jes\'us",
+    title = "{Stochastic gravitational wave background from stellar origin binary black
+        holes in LISA}",
+    eprint = "2304.06368",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2023/08/034",
+    journal = "JCAP",
+    volume = "08",
+    pages = "034",
+    year = "2023"
+}
+""",
+        r"""
+@article{Chen:2018rzo,
+    author = "Chen, Zu-Cheng and Huang, Fan and Huang, Qing-Guo",
+    title = "{Stochastic Gravitational-wave Background from Binary Black Holes and
+        Binary Neutron Stars and Implications for LISA}",
+    eprint = "1809.10360",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.3847/1538-4357/aaf581",
+    journal = "Astrophys. J.",
+    volume = "871",
+    number = "1",
+    pages = "97",
+    year = "2019"
+}
+""",
+    )
 
     def __init__(
         self,
@@ -119,8 +159,41 @@ class ExtragalacticSobbhBnsA(AnalyticTemplate):
     DEFAULT_REF_FREQ: ClassVar[float] = 1e-3
     DEFAULT_TILT: ClassVar[float] = 2.0 / 3.0
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Babak:2023lro,
+    author = "Babak, Stanislav and Caprini, Chiara and Figueroa, Daniel G. and Karnesis,
+        Nikolaos and Marcoccia, Paolo and Nardini, Germano and Pieroni, Mauro and
+        Ricciardone, Angelo and Sesana, Alberto and Torrado, Jes\'us",
+    title = "{Stochastic gravitational wave background from stellar origin binary black
+        holes in LISA}",
+    eprint = "2304.06368",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    doi = "10.1088/1475-7516/2023/08/034",
+    journal = "JCAP",
+    volume = "08",
+    pages = "034",
+    year = "2023"
+}
+""",
+        r"""
+@article{Chen:2018rzo,
+    author = "Chen, Zu-Cheng and Huang, Fan and Huang, Qing-Guo",
+    title = "{Stochastic Gravitational-wave Background from Binary Black Holes and
+        Binary Neutron Stars and Implications for LISA}",
+    eprint = "1809.10360",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.3847/1538-4357/aaf581",
+    journal = "Astrophys. J.",
+    volume = "871",
+    number = "1",
+    pages = "97",
+    year = "2019"
+}
+""",
+    )
 
     def __init__(
         self,

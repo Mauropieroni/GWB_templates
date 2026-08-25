@@ -8,6 +8,11 @@ R. Jinno, T. Konstandin, H. Rubira and I. Stomberg,
 "Higgsless simulations of cosmological phase transitions and gravitational
 waves",
 JCAP 02 (2023), 011; [arXiv:2209.04369 [astro-ph.CO]].
+
+Also see: M. Hindmarsh, S.J. Huber, K. Rummukainen and D.J. Weir,
+"Shape of the acoustic gravitational wave power spectrum from a first
+order phase transition", Phys.Rev.D 96 (2017) 103520; [arXiv:1704.05871
+[astro-ph.CO]] (original double-broken-power-law acoustic shape).
 """
 
 from __future__ import annotations
@@ -60,8 +65,60 @@ class PtSoundWaves(AnalyticTemplate):
         4.0,
     )
 
-    # TODO: cite (arXiv:2209.04369)
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Jinno:2022mie,
+    author = "Jinno, Ryusuke and Konstandin, Thomas and Rubira, Henrique and Stomberg,
+        Isak",
+    title = "{Higgsless simulations of cosmological phase transitions and gravitational
+        waves}",
+    eprint = "2209.04369",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "DESY 22-148, IFT-UAM/CSIC-22-100, TUM-HEP-1416/22",
+    doi = "10.1088/1475-7516/2023/02/011",
+    journal = "JCAP",
+    volume = "02",
+    pages = "011",
+    year = "2023"
+}
+""",
+        r"""
+@article{Ellis:2020awk,
+    author = "Ellis, John and Lewicki, Marek and No, José Miguel",
+    title = "{Gravitational waves from first-order cosmological phase transitions:
+        lifetime of the sound wave source}",
+    eprint = "2003.07360",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ph",
+    reportNumber = "KCL-PH-TH/2020-04, CERN-TH-2020-016, IFT-UAM/CSIC-20-35",
+    doi = "10.1088/1475-7516/2020/07/050",
+    journal = "JCAP",
+    volume = "07",
+    pages = "050",
+    year = "2020"
+}
+""",
+        r"""
+@article{Hindmarsh:2017gnf,
+    author = "Hindmarsh, Mark and Huber, Stephan J. and Rummukainen, Kari and Weir,
+        David J.",
+    title = "{Shape of the acoustic gravitational wave power spectrum from a first order
+        phase transition}",
+    eprint = "1704.05871",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "HIP-2017-02-TH, HIP-2017-02/TH",
+    doi = "10.1103/PhysRevD.96.103520",
+    journal = "Phys. Rev. D",
+    volume = "96",
+    number = "10",
+    pages = "103520",
+    year = "2017",
+    note = "[Erratum: Phys.Rev.D 101, 089902 (2020)]"
+}
+""",
+    )
 
     def __init__(
         self,

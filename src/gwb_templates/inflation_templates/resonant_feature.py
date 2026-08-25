@@ -1,5 +1,5 @@
 r"""
-Resonant-feature oscillatory modulation template (arXiv:1407.4034).
+Resonant-feature oscillatory modulation template (arXiv:1002.0833).
 
 Log-space oscillation. The coefficients ``C0, C1, C2, theta1, theta2`` and
 their derivatives are pre-computed on a grid of ``omega_resonant`` values
@@ -15,8 +15,11 @@ The numerical-table dependency on the hot path is why these classes inherit
 from :class:`~gwb_templates.template.NumericalTemplate`.
 
 References:
-  arXiv:1407.4034 (Flauger, Pajer & Paban)
-  arXiv:2407.04356
+  arXiv:1002.0833 (Flauger & Pajer — resonant non-Gaussianity)
+  arXiv:0907.2916 (Flauger, McAllister, Pajer, Westphal & Xu — original
+  resonant oscillatory power-spectrum template from axion monodromy)
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
+  and physics interpretation)
 """
 
 from __future__ import annotations
@@ -165,8 +168,55 @@ class ResonantFeature(NumericalTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Flauger:2010ja,
+    author = "Flauger, Raphael and Pajer, Enrico",
+    title = "{Resonant Non-Gaussianity}",
+    eprint = "1002.0833",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    doi = "10.1088/1475-7516/2011/01/017",
+    journal = "JCAP",
+    volume = "01",
+    pages = "017",
+    year = "2011"
+}
+""",
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
+    )
 
     # interpax-based interpolators are JAX-traceable so we can keep autodiff.
     jittable: ClassVar[bool] = True
@@ -241,8 +291,55 @@ class ResonantFeatureLog(NumericalTemplate):
         Phase offset (radians).
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Flauger:2010ja,
+    author = "Flauger, Raphael and Pajer, Enrico",
+    title = "{Resonant Non-Gaussianity}",
+    eprint = "1002.0833",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    doi = "10.1088/1475-7516/2011/01/017",
+    journal = "JCAP",
+    volume = "01",
+    pages = "017",
+    year = "2011"
+}
+""",
+        r"""
+@article{LISACosmologyWorkingGroup:2024hsc,
+    author = "Braglia, Matteo and others",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from inflation in LISA: reconstruction pipeline and
+        physics interpretation}",
+    eprint = "2407.04356",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-03, CERN-TH-2024-072",
+    doi = "10.1088/1475-7516/2024/11/032",
+    journal = "JCAP",
+    volume = "11",
+    pages = "032",
+    year = "2024"
+}
+""",
+        r"""
+@article{Flauger:2009ab,
+    author = "Flauger, Raphael and McAllister, Liam and Pajer, Enrico and Westphal,
+        Alexander and Xu, Gang",
+    title = "{Oscillations in the CMB from Axion Monodromy Inflation}",
+    eprint = "0907.2916",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-th",
+    reportNumber = "SLAC-PUB-14821",
+    doi = "10.1088/1475-7516/2010/06/009",
+    journal = "JCAP",
+    volume = "06",
+    pages = "009",
+    year = "2010"
+}
+""",
+    )
 
     jittable: ClassVar[bool] = True
     differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]

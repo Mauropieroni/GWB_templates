@@ -1,7 +1,7 @@
 r"""
 Galactic compact binary foreground template (old / 6-parameter form).
 
-Implements Eq. 14 of Mangiagli et al. 2020 (arXiv:1803.01944):
+Implements Eq. 14 of Robson, Cornish & Liu 2019 (arXiv:1803.01944):
 
 .. math::
 
@@ -26,7 +26,7 @@ ArrayLike: TypeAlias = jtp.ArrayLike
 
 class GalacticBinariesOld(AnalyticTemplate):
     r"""
-    Galactic binary foreground (Mangiagli et al. 2020, 6-parameter form).
+    Galactic binary foreground (Robson, Cornish & Liu 2019, 6-parameter form).
 
     Free parameters
     ---------------
@@ -44,8 +44,23 @@ class GalacticBinariesOld(AnalyticTemplate):
         Knee frequency (Hz) of the ``tanh`` cutoff.
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Robson:2018ifk,
+    author = "Robson, Travis and Cornish, Neil J. and Liu, Chang",
+    title = "{The construction and use of LISA sensitivity curves}",
+    eprint = "1803.01944",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.HE",
+    doi = "10.1088/1361-6382/ab1101",
+    journal = "Class. Quant. Grav.",
+    volume = "36",
+    number = "10",
+    pages = "105011",
+    year = "2019"
+}
+""",
+    )
 
     def __init__(
         self,
@@ -148,8 +163,23 @@ class GalacticBinariesOldA(AnalyticTemplate):
     DEFAULT_GAMMA: ClassVar[float] = 1680.0
     DEFAULT_FK: ClassVar[float] = 0.00113
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Robson:2018ifk,
+    author = "Robson, Travis and Cornish, Neil J. and Liu, Chang",
+    title = "{The construction and use of LISA sensitivity curves}",
+    eprint = "1803.01944",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.HE",
+    doi = "10.1088/1361-6382/ab1101",
+    journal = "Class. Quant. Grav.",
+    volume = "36",
+    number = "10",
+    pages = "105011",
+    year = "2019"
+}
+""",
+    )
 
     def __init__(
         self,
