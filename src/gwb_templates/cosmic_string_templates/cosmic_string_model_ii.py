@@ -153,7 +153,7 @@ class CosmicStringModelII(NumericalTemplate):
         r"""
     @article{Auclair:2019wcv,
         author = "Auclair, Pierre and others",
-        title = "{Probing the gravitational wave background from cosmic strings with 
+        title = "{Probing the gravitational wave background from cosmic strings with
             LISA}",
         eprint = "1909.00819",
         archivePrefix = "arXiv",
@@ -168,10 +168,10 @@ class CosmicStringModelII(NumericalTemplate):
         r"""
     @article{Blanco-Pillado:2024aca,
         author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
-            Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. 
+            Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu.
             and Sousa, Lara and Wachter, Jeremy M.",
         collaboration = "LISA Cosmology Working Group",
-        title = "{Gravitational waves from cosmic strings in LISA: reconstruction 
+        title = "{Gravitational waves from cosmic strings in LISA: reconstruction
             pipeline and physics interpretation}",
         eprint = "2405.03740",
         archivePrefix = "arXiv",
