@@ -313,6 +313,51 @@ def finite_difference_d2f_dtheta(
     return jnp.asarray(mixed.reshape(freq.shape + (np.asarray(parameters).size,)))
 
 
+def to_frac_ix(val: ArrayLike, axis: Array) -> Array:
+    """
+    Convert a physical value to a fractional index along a uniform grid axis.
+
+    ``axis`` must be evenly spaced: the fractional index is obtained by
+    linear rescaling, not by searching the axis. This continuous index is
+    what lets the bilinear helpers below stay fully JAX-traceable (no
+    Python-level branching) and gives a closed-form gradient, which is why
+    grid lookups here go through a fractional index rather than e.g.
+    ``jnp.interp`` or a SciPy grid interpolator.
+
+    Args:
+        val: Physical value(s) to convert.
+        axis: 1D grid axis, assumed uniformly spaced.
+
+    Returns:
+        Fractional index (or indices) into ``axis``.
+    """
+    n = axis.shape[0]
+    return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
+
+
+def bilinear_interp(ix: Array, iy: Array, grid: Array, mode: str = "nearest") -> Array:
+    """
+    Differentiable bilinear interpolation of a 2D grid at fractional indices.
+
+    Thin wrapper around ``jax.scipy.ndimage.map_coordinates`` (``order=1``),
+    so gradients come from JAX autodiff rather than a hand-written formula.
+    ``mode="nearest"`` clamps out-of-range indices to the edge value, matching
+    ``to_frac_ix`` producing an index outside ``[0, n-1]`` (constant
+    extrapolation, zero slope past the grid edge).
+
+    Args:
+        ix: Fractional index along the grid's first axis.
+        iy: Fractional index along the grid's second axis.
+        grid: 2D array of values.
+        mode: Boundary handling passed to ``map_coordinates``.
+
+    Returns:
+        Interpolated value(s), broadcasting over ``ix``/``iy``.
+    """
+    ix_b, iy_b = jnp.broadcast_arrays(jnp.asarray(ix), jnp.asarray(iy))
+    return jax.scipy.ndimage.map_coordinates(grid, [ix_b, iy_b], order=1, mode=mode)
+
+
 def make_log_log_interpolator(
     freq: AnyArray,
     compute_fn: Callable[..., AnyArray],

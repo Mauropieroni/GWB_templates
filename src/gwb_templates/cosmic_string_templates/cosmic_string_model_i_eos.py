@@ -236,9 +236,8 @@ class CosmicStringModelIEos(NumericalTemplate):
         logtemp_GeV: jax.Array,
         eos: jax.Array,
     ) -> jax.Array:
-        freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(
-            freq,
+            frequency,
             _compute_spectrum_eos,
             float(log_Gmu),
             float(log_alpha),

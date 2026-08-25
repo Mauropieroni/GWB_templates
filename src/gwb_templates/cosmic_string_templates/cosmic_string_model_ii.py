@@ -25,6 +25,8 @@ import jax.typing as jtp
 import numpy as np
 
 from gwb_templates.template import NumericalTemplate
+from gwb_templates.utils import bilinear_interp as _bilinear_interp
+from gwb_templates.utils import to_frac_ix as _to_frac_ix
 
 ArrayLike: TypeAlias = jtp.ArrayLike
 
@@ -50,82 +52,6 @@ def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
     freq_axis = jnp.array(data_np[0, 1:])
     log10_omega = jnp.array(data_np[1:, 1:])
     return gmu_axis, freq_axis, log10_omega
-
-
-# ── JAX bilinear interpolation primitives ────────────────────────────────────
-
-
-def _to_frac_ix(val: ArrayLike, axis: jax.Array) -> jax.Array:
-    """Convert a physical value to a fractional grid index along ``axis``."""
-    n = axis.shape[0]
-    return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
-
-
-def _bilinear_eval(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Bilinear interpolation of log10(h^2 Omega) at fractional indices."""
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    tx = jnp.clip(ix - kx, 0.0, 1.0)
-
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    return (
-        (1.0 - tx) * (1.0 - ty) * g00
-        + tx * (1.0 - ty) * g10
-        + (1.0 - tx) * ty * g01
-        + tx * ty * g11
-    )
-
-
-def _bilinear_dS_dix(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Analytical dS/d(ix) for the bilinear interpolation."""
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    return (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
 
 
 # ── Template classes ──────────────────────────────────────────────────────────
@@ -245,8 +171,6 @@ class CosmicStringModelII(NumericalTemplate):
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
-        self.n_gmu: int = int(gmu_axis.shape[0])
-        self.n_freq_grid: int = int(freq_axis.shape[0])
 
     def omega_gw_h2(
         self,
@@ -254,36 +178,10 @@ class CosmicStringModelII(NumericalTemplate):
         log_Gmu: ArrayLike,
     ) -> jax.Array:
         r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
-        log10_f = jnp.log10(jnp.asarray(frequency))
+        log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        return 10.0 ** _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: ArrayLike,
-        theta: jax.Array,
-    ) -> jax.Array:
-        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
-        log_Gmu = theta[0]
-        log10_f = jnp.log10(jnp.asarray(frequency))
-        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
-        iy = _to_frac_ix(log10_f, self.freq_axis)
-
-        S = _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-        h2_omega = 10.0**S
-
-        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
-        dS_dix = _bilinear_dS_dix(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-
-        grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
-        return grad[..., None]
+        return 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)
 
 
 class AbelianHiggsModelII(NumericalTemplate):
@@ -399,8 +297,6 @@ class AbelianHiggsModelII(NumericalTemplate):
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
-        self.n_gmu: int = int(gmu_axis.shape[0])
-        self.n_freq_grid: int = int(freq_axis.shape[0])
 
     def omega_gw_h2(
         self,
@@ -408,41 +304,8 @@ class AbelianHiggsModelII(NumericalTemplate):
         log_Gmu: ArrayLike,
         logf: ArrayLike,
     ) -> jax.Array:
-        log10_f = jnp.log10(jnp.asarray(frequency))
+        log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        spectrum = 10.0 ** _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        spectrum = 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)
         return 10.0**logf * spectrum
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: ArrayLike,
-        theta: jax.Array,
-    ) -> jax.Array:
-        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
-        log_Gmu = theta[0]
-        logf = theta[1]
-        log10_f = jnp.log10(jnp.asarray(frequency))
-        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
-        iy = _to_frac_ix(log10_f, self.freq_axis)
-
-        S = _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-        h2_omega_ii = 10.0**S
-        h2_omega_ah = 10.0**logf * h2_omega_ii
-
-        # d/d(log_Gmu)
-        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
-        dS_dix = _bilinear_dS_dix(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-        d_d_log_Gmu = (
-            10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
-        )
-        # d/d(logf)
-        d_d_logf = jnp.log(10.0) * h2_omega_ah
-
-        return jnp.stack([d_d_log_Gmu, d_d_logf], axis=-1)

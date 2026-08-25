@@ -282,9 +282,8 @@ class CosmicStringModelIEdf(NumericalTemplate):
         log_T_Extra: jax.Array,
         Dg_Extra: jax.Array,
     ) -> jax.Array:
-        freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(
-            freq,
+            frequency,
             _compute_spectrum_edf,
             float(log_Gmu),
             float(log_alpha),

@@ -5,7 +5,8 @@ Model III uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and
 evaluates h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic
 differentiation works.
 
-Reference: arXiv:astro-ph/0511646 (Ringeval, Sakellariadou & Bouchet — Nambu-Goto simulations);
+Reference: arXiv:astro-ph/0511646 (Ringeval, Sakellariadou & Bouchet — Nambu-Goto
+simulations);
            arXiv:1006.0931 (Lorenz, Ringeval & Sakellariadou — LRS Loop distribution);
            arXiv:1903.06685 (Auclair et al. — Extension of the model).
 """
@@ -22,6 +23,8 @@ import jax.typing as jtp
 import numpy as np
 
 from gwb_templates.template import NumericalTemplate
+from gwb_templates.utils import bilinear_interp as _bilinear_interp
+from gwb_templates.utils import to_frac_ix as _to_frac_ix
 
 ArrayLike: TypeAlias = jtp.ArrayLike
 
@@ -47,82 +50,6 @@ def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
     freq_axis = jnp.array(data_np[0, 1:])
     log10_omega = jnp.array(data_np[1:, 1:])
     return gmu_axis, freq_axis, log10_omega
-
-
-# ── JAX bilinear interpolation primitives ────────────────────────────────────
-
-
-def _to_frac_ix(val: ArrayLike, axis: jax.Array) -> jax.Array:
-    """Convert a physical value to a fractional grid index along ``axis``."""
-    n = axis.shape[0]
-    return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
-
-
-def _bilinear_eval(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Bilinear interpolation of log10(h^2 Omega) at fractional indices."""
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    tx = jnp.clip(ix - kx, 0.0, 1.0)
-
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    return (
-        (1.0 - tx) * (1.0 - ty) * g00
-        + tx * (1.0 - ty) * g10
-        + (1.0 - tx) * ty * g01
-        + tx * ty * g11
-    )
-
-
-def _bilinear_dS_dix(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Analytical dS/d(ix) for the bilinear interpolation."""
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    return (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
 
 
 # ── Template classes ──────────────────────────────────────────────────────────
@@ -163,7 +90,8 @@ class CosmicStringModelIII(NumericalTemplate):
         r"""
 @article{Lorenz:2010sm,
     author = "Lorenz, Larissa and Ringeval, Christophe and Sakellariadou, Mairi",
-    title = "{Cosmic string loop distribution on all length scales and at any redshift}",
+    title = "{Cosmic string loop distribution on all length scales and at any redshift
+        }",
     eprint = "1006.0931",
     archivePrefix = "arXiv",
     primaryClass = "astro-ph.CO",
@@ -176,7 +104,8 @@ class CosmicStringModelIII(NumericalTemplate):
 """,
         r"""
 @article{Auclair:2019zoz,
-    author = "Auclair, Pierre and Ringeval, Christophe and Sakellariadou, Mairi and Steer, Daniele",
+    author = "Auclair, Pierre and Ringeval, Christophe and Sakellariadou, Mairi and
+    Steer, Daniele",
     title = "{Cosmic string loop production functions}",
     eprint = "1903.06685",
     archivePrefix = "arXiv",
@@ -236,40 +165,14 @@ class CosmicStringModelIII(NumericalTemplate):
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
-        self.n_gmu: int = int(gmu_axis.shape[0])
-        self.n_freq_grid: int = int(freq_axis.shape[0])
 
     def omega_gw_h2(
         self,
         frequency: ArrayLike,
         log_Gmu: ArrayLike,
     ) -> jax.Array:
-        r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
-        log10_f = jnp.log10(jnp.asarray(frequency))
+        r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model III."""
+        log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        return 10.0 ** _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: ArrayLike,
-        theta: jax.Array,
-    ) -> jax.Array:
-        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
-        log_Gmu = theta[0]
-        log10_f = jnp.log10(jnp.asarray(frequency))
-        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
-        iy = _to_frac_ix(log10_f, self.freq_axis)
-
-        S = _bilinear_eval(ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid)
-        h2_omega = 10.0**S
-
-        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
-        dS_dix = _bilinear_dS_dix(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-
-        grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
-        return grad[..., None]
+        return 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)

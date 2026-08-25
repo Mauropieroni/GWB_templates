@@ -469,9 +469,8 @@ class CosmicStringModelI(NumericalTemplate):
         q: ArrayLike,
     ) -> jax.Array:
         r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model I."""
-        freq = np.asarray(frequency, dtype=float)
         return log_log_interpolate(
-            freq,
+            frequency,
             _compute_spectrum,
             float(log_Gmu),
             float(log_alpha),
