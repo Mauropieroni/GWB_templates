@@ -1,10 +1,9 @@
 """
 Cosmic String Model I with non-standard equation of state (EOS) template (5 parameters).
 
-Extends :class:`CosmicStringModelI` with a modified high-frequency spectrum
-above a cutoff frequency set by a cosmological phase transition. The EOS
-parameter ``w`` controls the spectral tilt above the cutoff via
-Appendix B of arXiv:2405.03740.
+Extends :class:`CosmicStringModelI` with a modified high-frequency spectrum above a
+cutoff frequency set by a cosmological phase transition. The EOS parameter ``w``
+controls the spectral tilt above the cutoff via Appendix B of arXiv:2405.03740.
 
 Reference: arXiv:2405.03740, Appendix B.
 """
@@ -30,6 +29,7 @@ from gwb_templates.cosmic_string_templates.cosmic_string_model_i import (
     _get_f_min_m,
     _get_f_min_r,
     _hyperharmonic,
+    _safe_q,
     _xi_r,
 )
 
@@ -109,6 +109,7 @@ def _compute_spectrum_eos(
     eos: ArrayLike,
 ) -> jax.Array:
     """Evaluate h^2 * Omega_GW(freq) for the EOS model (JAX-traceable)."""
+    q = _safe_q(q)
     f_eV = jnp.asarray(freq, dtype=float) * ct.h_bar_eV_s
     Gmu = 10.0**log_Gmu
     alpha = 10.0**log_alpha

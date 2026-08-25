@@ -60,6 +60,12 @@ from gwb_templates.cosmic_string_templates import (  # noqa: F401
     cosmic_string_model_i_eos,
 )
 from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa: F401
+from gwb_templates.cosmic_string_templates import (  # noqa: F401
+    cosmic_string_model_ii_dof,
+)
+from gwb_templates.cosmic_string_templates import (  # noqa: F401
+    abelian_higgs_model_ii,
+)
 
 __all__ = [
     "Template",

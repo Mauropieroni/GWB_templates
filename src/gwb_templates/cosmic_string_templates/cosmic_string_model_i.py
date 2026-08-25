@@ -1,22 +1,24 @@
 """
 Cosmic String Model I template (3 parameters).
 
-Computes h^2 * Omega_GW(f) for a network of Nambu-Goto cosmic strings
-following the analytic approach of arXiv:2405.03740.
+Computes h^2 * Omega_GW(f) for a network of Nambu-Goto cosmic strings following the
+analytic approach of arXiv:1304.2445,1403.2621 (see also 1909.00819 and 2405.03740).
 
-The spectrum is computed entirely in JAX using ``jax.scipy.special.hyp2f1``
-via a Pfaff transformation to handle the large-negative-argument regime that
-arises in the Euler-Maclaurin summation. The template is fully JIT-compilable
-and autodiff-compatible.
+The spectrum is computed entirely in JAX; the Euler-Maclaurin summation's hyp2f1
+evaluations use two linear transformations (Pfaff and DLMF 15.8.2) picked by argument
+magnitude, each evaluated via a fixed-length Taylor series (see ``_hyp2f1_series``)
+rather than ``jax.scipy.special.hyp2f1``'s adaptive one, for the same accuracy at a
+fraction of the cost. The template is fully JIT-compilable and autodiff-compatible.
 
-Reference: arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction
-pipeline and physics interpretation).
+Reference: arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction pipeline
+and physics interpretation).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
+
 
 import jax
 import jax.numpy as jnp
@@ -47,6 +49,22 @@ _a_star_factor = jnp.array([5.8897e16, 7.2182e19, 7.5617e21])
 
 
 # ── Helper functions ──────────────────────────────────────────────────────────
+
+
+def _safe_q(q: jax.Array) -> jax.Array:
+    """Nudge q away from the exact prior boundary q=2.
+
+    At q=2, the exponents a=-q, 1-q, 2-q used throughout this module hit -2, -1, 0, each
+    a separate pole: _I's 1/(a+1) prefactor at a=-1, hyp2f1's c=a+2=0 pole at a=-2, and
+    _hyperharmonic's zeta(r=1,...) pole at q-1=1. All are removable, but they only ever
+    coincide at this one point, so nudging q dodges all three at once instead of
+    deriving a regularized limit for each. The scipy reference divides by zero at this
+    exact point too (verified).
+
+    Tested numerically that abs(q - 2.0) < 1e-4 the result is noisy and unstable, but by
+    1e-3 the result is smooth and consistent with the q<1.999 trend.
+    """
+    return jnp.where(jnp.abs(q - 2.0) < 1e-4, 2.0 - 1e-4, q)
 
 
 def _hyperharmonic(r: jax.Array, N: jax.Array) -> jax.Array:
@@ -175,23 +193,118 @@ def _get_C_m(f_eV: jax.Array, Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
 
 # ── Euler–Maclaurin summation pieces (Eqs. A.7–A.14) ────────────────────────
 
+_HYP2F1_SERIES_TERMS = 100
+
+
+@jax.jit
+def _hyp2f1_series(a: jax.Array, b: jax.Array, c: jax.Array, x: jax.Array) -> jax.Array:
+    """Gauss hypergeometric 2F1(a,b;c;x) via a fixed-length Taylor series.
+
+    ``jax.scipy.special.hyp2f1`` runs an *adaptive* ``lax.while_loop`` (up to 250
+    iterations, stopping once a term drops below machine epsilon). When we call this via
+    ``_hyp2f1_neg`` we only need a known-convergent argument (the near branch's ``w`` in
+    [0, 2/3), the far branch's ``1/z`` in (-0.5, 0.5)). For that using ``lax.fori_loop``
+    measured 300-1500x faster for the same result to machine precision.
+
+    Tested that 100 terms are sufficient for ~1e-14 relative accuracy for the argument
+    ranges used in this module (not a general-purpose hyp2f1 substitute: it silently
+    diverges for |x| >= 1).
+
+    The explicit @jax.jit could be removed if the high level caller is jitted, for the
+    moment we keep it here to avoid a ~600x slowdown
+    """
+
+    def body(
+        k: jax.Array, state: tuple[jax.Array, jax.Array]
+    ) -> tuple[jax.Array, jax.Array]:
+        serie, term = state
+        kf = k.astype(x.dtype)
+        term = term * (a + kf - 1.0) * (b + kf - 1.0) / (c + kf - 1.0) / kf * x
+        return serie + term, term
+
+    ones = jnp.ones_like(x)
+    serie, _ = jax.lax.fori_loop(1, _HYP2F1_SERIES_TERMS, body, (ones, ones))
+    return serie
+
 
 def _hyp2f1_neg(a: jax.Array, b: float, c: jax.Array, z: jax.Array) -> jax.Array:
-    """hyp2f1 stable for z <= 0 via the Pfaff transformation.
+    """hyp2f1 stable for z <= 0, via two linear transformations picked by |z|.
 
-    jax.scipy.special.hyp2f1 diverges for large negative z. The Pfaff
-    identity maps z -> w = z/(z-1) in [0, 1) for all z <= 0, keeping the
-    argument inside the unit disk:
+    ``jax.scipy.special.hyp2f1`` is series-based and accurate only when z is close to 0.
+    Here z = -A*N can be large so we use 2 transformations to map z into something safe:
 
-        hyp2f1(a, b, c, z) = (1 - z)^{-a} * hyp2f1(a, c-b, c, z/(z-1))
+    * The Pfaff identity maps z -> w = z/(z-1) in [0, 1), safe only for |z| below ~2.
+    * The DLMF 15.8.2 connection formula maps z -> 1/z, safe for |z| above ~2 but
+        blows up as z -> 0. Requires b - a not an integer (true in most cases).
+
+    Together they cover the whole z <= 0 domain to ~1e-14 relative accuracy.
+
+    NB: the Pfaff branch is rarely selected in practice (N here is routinely 1e9-1e15,
+    so z=-A*N clears |z|<2 for most elements most of the time).
     """
-    w = z / (z - 1.0)
-    return (1.0 - z) ** (-a) * jsc.hyp2f1(a, c - b, c, w)
+    small = jnp.abs(z) < 2.0
+
+    # Pfaff branch: hyp2f1(a, b, c, z) = (1-z)^-a * hyp2f1(a, c-b, c, z/(z-1))
+    z_near = jnp.where(small, z, -1.0)
+    w = z_near / (z_near - 1.0)
+    near = (1.0 - z_near) ** (-a) * _hyp2f1_series(a, c - b, c, w)
+
+    # 1/z branch (DLMF 15.8.2):
+    #   hyp2f1(a,b,c,z) = pref1 * (-z)^-a * hyp2f1(a, 1-c+a, 1-b+a, 1/z)
+    #                   + pref2 * (-z)^-b * hyp2f1(b, 1-c+b, 1-a+b, 1/z)
+    #
+    # This 2-term formula has removable poles whenever b-a lands on an integer:
+    # Gamma(b-a) or Gamma(a-b) blows up in one prefactor even though hyp2f1 is
+    # finite there. Happens at isolated q values, some "nice" (e.g. q=1.5), so
+    # it needs guarding -- falling back to Pfaff would be wrong, not just
+    # imprecise, since Pfaff is inaccurate for the large-|z| regime this branch
+    # is for. Instead nudge b so b-a lands a safe distance from the integer:
+    # checked against mpmath, accurate to ~1e-15 down to 1e-8 from the pole.
+    bma = b - a
+    dist_to_int = bma - jnp.round(bma)
+    near_pole = jnp.abs(dist_to_int) < 1e-4
+    safe_shift = jnp.where(dist_to_int >= 0.0, 1e-6, -1e-6)
+    b_safe = jnp.where(near_pole, a + jnp.round(bma) + safe_shift, b)
+
+    z_far = jnp.where(small, -2.0, z)
+    inv_z = 1.0 / z_far
+    F1 = _hyp2f1_series(a, 1.0 - c + a, 1.0 - b_safe + a, inv_z)
+    F2 = _hyp2f1_series(b_safe, 1.0 - c + b_safe, 1.0 - a + b_safe, inv_z)
+    pref1 = (
+        jsc.gamma(c) * jsc.gamma(b_safe - a) / (jsc.gamma(b_safe) * jsc.gamma(c - a))
+    )
+    pref2 = (
+        jsc.gamma(c) * jsc.gamma(a - b_safe) / (jsc.gamma(a) * jsc.gamma(c - b_safe))
+    )
+    far = pref1 * (-z_far) ** (-a) * F1 + pref2 * (-z_far) ** (-b_safe) * F2
+
+    # Safety net: fall back to Pfaff for any other pole (e.g. a, c-a or c-b on
+    # a non-positive integer) that would otherwise leak a NaN/Inf. A real
+    # accuracy trade-off, but for inputs no call site here actually produces.
+    use_near = small | ~jnp.isfinite(far)
+    return jnp.where(use_near, near, far)
 
 
 def _I(a: jax.Array, b: float, A: jax.Array, N: jax.Array) -> jax.Array:
-    """Integral I(a, b, A, N); Eq. A.7."""
-    return N ** (a + 1.0) / (a + 1.0) * _hyp2f1_neg(a + 1.0, b, a + 2.0, -A * N)
+    """Integral I(a, b, A, N); Eq. A.7.
+
+    Has a removable singularity at a = -1: the explicit 1/(a+1) factor diverges there,
+    even though I(a,A,N) - I(a,A,1) -- the only way this is ever used, via _delta() in
+    _M() -- has a finite limit (as a -> -1, hyp2f1(a+1,b,a+2,z) -> hyp2f1(0,b,1,z) = 1
+    identically, cancelling the pole between the two evaluations). a=-1 is reachable
+    here (a = 1-q at q=2, the q-prior's upper edge), so instead of dividing by an exact
+    zero we nudge a+1 a tiny bit away from 0, trading an ~1e-6 bias for a finite result
+    (the scipy reference divides by zero at the same point).
+    """
+    denom = a + 1.0
+    safe_denom = jnp.where(
+        jnp.abs(denom) < 1e-6, jnp.where(denom >= 0.0, 1e-6, -1e-6), denom
+    )
+    return (
+        N**safe_denom
+        / safe_denom
+        * _hyp2f1_neg(safe_denom, b, safe_denom + 1.0, -A * N)
+    )
 
 
 def _D1(a: jax.Array, b: float | jax.Array, A: jax.Array, N: jax.Array) -> jax.Array:
@@ -278,15 +391,24 @@ def _M_delta(
 def _Omega_r_dof(
     f_eV: jax.Array, Gmu: jax.Array, alpha: jax.Array, q: jax.Array, N: jax.Array
 ) -> jax.Array:
-    """GW energy density from radiation-era loops with SM DOF changes (Eq. A.18)."""
+    """GW energy density from radiation-era loops with SM DOF changes (Eq. A.18).
+
+    The 4 DOF steps are evaluated as a single batched (step, freq)-shaped call to
+    _M_delta/_hyp2f1_neg rather than 4 unrolled Python-loop calls: same arithmetic, one
+    XLA op instead of four -- matters for compile time once this is nested inside the
+    EOS/EDF templates that call it several times.
+    """
     Cr = _get_C_r_no_dof(Gmu, alpha) / jsc.zeta(q, 1.0)
-    A_all = [_get_A_n(f_eV, Gmu, alpha, i) for i in range(len(_Delta_gr) + 1)]
-    total = 0.0
-    for i, dg in enumerate(_Delta_gr):
-        A_now = jnp.sqrt(dg) * A_all[i]
-        A_next = jnp.sqrt(dg) * A_all[i + 1]
-        total += dg * _M_delta(-q, A_next, A_now, N)
-    return Cr * total
+    A_all = jnp.stack(
+        [_get_A_n(f_eV, Gmu, alpha, i) for i in range(len(_Delta_gr) + 1)]
+    )
+    sqrt_dg = jnp.sqrt(_Delta_gr)[:, jnp.newaxis]  # (n_steps, 1)
+    A_now = sqrt_dg * A_all[:-1]  # (n_steps, *f_eV.shape)
+    A_next = sqrt_dg * A_all[1:]
+    contrib = _Delta_gr[:, jnp.newaxis] * _M_delta(
+        -q, A_next, A_now, N[jnp.newaxis, ...]
+    )
+    return Cr * jnp.sum(contrib, axis=0)
 
 
 def _Omega_rm(
@@ -349,6 +471,7 @@ def _compute_spectrum(
     freq: jax.Array, log_Gmu: jax.Array, log_alpha: jax.Array, q: jax.Array
 ) -> jax.Array:
     """Evaluate h^2 * Omega_GW(freq) for Model I (JAX-traceable)."""
+    q = _safe_q(q)
     f_eV = freq * ct.h_bar_eV_s
     Gmu = 10.0**log_Gmu
     alpha = 10.0**log_alpha
@@ -419,8 +542,8 @@ class CosmicStringModelI(AnalyticTemplate):
     q
         Harmonic power-law index.
 
-    The spectrum is computed directly in JAX via ``jax.scipy.special.hyp2f1``
-    and is fully JIT-compilable and autodiff-compatible.
+    The spectrum is computed directly in JAX (see ``_hyp2f1_series``) and is fully
+    JIT-compilable and autodiff-compatible.
     """
 
     # TODO: cite

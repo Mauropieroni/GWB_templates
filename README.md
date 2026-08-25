@@ -187,14 +187,18 @@ All templates listed below are class names (also their registry keys). The full 
 
 ### Cosmic strings
 
-All cosmic-string templates inherit from `NumericalTemplate`.
+`CosmicStringModelI`, `CosmicStringModelIEdf`, and `CosmicStringModelIEos` inherit
+from `AnalyticTemplate`; the Model II family inherits from `NumericalTemplate` but
+overrides `jittable=True` and `differentiation_backend="autodiff"`. All six are
+pure JAX, jittable, and autodiff-differentiable.
 
 | Class | Parameters | Description |
 | --- | --- | --- |
-| `CosmicStringModelI` | `log_Gmu, log_alpha, q` | Nambu-Goto Model I (NumPy/SciPy internals; FD backend) |
-| `CosmicStringModelIEdf` | `log_Gmu, log_alpha, q, log_T_Extra, Dg_Extra` | Model I with extra DOFs (FD backend) |
-| `CosmicStringModelIEos` | `log_Gmu, log_alpha, q, logtemp_GeV, eos` | Model I with equation-of-state correction (FD backend) |
-| `CosmicStringModelII` | `log_Gmu` | Model II — precomputed grid `data/Model-II_BOS-loggrid.dat`, JAX-traceable bilinear interpolation (autodiff backend, jittable) |
+| `CosmicStringModelI` | `log_Gmu, log_alpha, q` | Nambu-Goto Model I — Euler-Maclaurin summation, JAX hyp2f1 (autodiff backend, jittable) |
+| `CosmicStringModelIEdf` | `log_Gmu, log_alpha, q, log_T_Extra, Dg_Extra` | Model I with extra BSM DOFs (autodiff backend, jittable) |
+| `CosmicStringModelIEos` | `log_Gmu, log_alpha, q, logtemp_GeV, eos` | Model I with equation-of-state correction (autodiff backend, jittable) |
+| `CosmicStringModelII` | `log_Gmu` | Model II — precomputed grid `data/Model-II_BOS-loggrid.dat`, JAX bilinear interpolation (autodiff backend, jittable) |
+| `CosmicStringModelIIDof` | `log_Gmu, log_T_delta, delta_g` | Model II with non-SM DOF changes — precomputed 4D grid `data/DOF-Model-II_BOS-arrays.npz`, JAX quadrilinear interpolation (autodiff backend, jittable) |
 | `AbelianHiggsModelII` | `log_Gmu, logf` | Abelian-Higgs amplitude-scaled wrapper around Model II |
 
 ---
@@ -211,7 +215,7 @@ src/gwb_templates/
 ├── FOPT_templates/                   # FOPT broken power laws and PT contributions
 ├── inflation_templates/              # Sharp / resonant / double-peak templates
 ├── astrophysical_templates/          # Galactic + extragalactic foregrounds
-└── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
+└── cosmic_string_templates/          # Model I / Edf / Eos / II / IIDof + AbelianHiggs (with data/)
 ```
 
 ---
