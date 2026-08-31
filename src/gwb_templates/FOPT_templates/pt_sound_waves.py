@@ -163,7 +163,7 @@ class PtSoundWaves(AnalyticTemplate):
             float(transition_smoothness_low_f),
             float(transition_smoothness_high_f),
         )
-        
+
         default_labels = {
             "log_K": r"$\log_{10}K$",
             "log_R_H_star": r"$\log_{10}(R_* H_*)$",

@@ -43,7 +43,7 @@ class PtPlasma(AnalyticTemplate):
     Configuration
     -------------
     amplitude_prefactor_sw
-        Numerical factor in the amplitude of the sound wave contribution. 
+        Numerical factor in the amplitude of the sound wave contribution.
         Defaults to `PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR`.
     spectral_index_low_f_sw
         Low-frequency spectral index of the sound wave contribution.
@@ -63,7 +63,7 @@ class PtPlasma(AnalyticTemplate):
         spectral slopes of the sound wave contribution.
         Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     amplitude_prefactor_turb
-        Numerical factor in the amplitude of the turbulence contribution. 
+        Numerical factor in the amplitude of the turbulence contribution.
         Defaults to `PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR`.
     spectral_index_low_f_turb
         Low-frequency spectral index of the turbulence contribution.
@@ -107,11 +107,13 @@ class PtPlasma(AnalyticTemplate):
         r"""
 @article{Caprini:2019egz,
     author = "Caprini, Chiara and others",
-    title = "{Detecting gravitational waves from cosmological phase transitions with LISA: an update}",
+    title = "{Detecting gravitational waves from cosmological phase transitions with
+        LISA: an update}",
     eprint = "1910.13125",
     archivePrefix = "arXiv",
     primaryClass = "astro-ph.CO",
-    reportNumber = "DESY-19-159, IPPP/19/27, HIP-2019-14/TH, MITP/19-066, IFT-UAM/CSIC-19-139",
+    reportNumber = "DESY-19-159, IPPP/19/27, HIP-2019-14/TH, MITP/19-066,
+        IFT-UAM/CSIC-19-139",
     doi = "10.1088/1475-7516/2020/03/024",
     journal = "JCAP",
     volume = "03",
@@ -122,7 +124,8 @@ class PtPlasma(AnalyticTemplate):
         r"""
 @article{Caprini:2015zlo,
     author = "Caprini, Chiara and others",
-    title = "{Science with the space-based interferometer eLISA. II: Gravitational waves from cosmological phase transitions}",
+    title = "{Science with the space-based interferometer eLISA. II: Gravitational waves
+        from cosmological phase transitions}",
     eprint = "1512.06239",
     archivePrefix = "arXiv",
     primaryClass = "astro-ph.CO",
@@ -183,7 +186,7 @@ class PtPlasma(AnalyticTemplate):
             float(spectral_index_mid_f_sw),
             float(spectral_index_high_f_sw),
             float(transition_smoothness_low_f_sw),
-            float(transition_smoothness_high_f_sw) 
+            float(transition_smoothness_high_f_sw)
         )
         self._turbulence = PtTurbulence(
             float(amplitude_prefactor_turb),
@@ -191,7 +194,7 @@ class PtPlasma(AnalyticTemplate):
             float(spectral_index_mid_f_turb),
             float(spectral_index_high_f_turb),
             float(transition_smoothness_low_f_turb),
-            float(transition_smoothness_high_f_turb) 
+            float(transition_smoothness_high_f_turb)
         )
 
         super().__init__(

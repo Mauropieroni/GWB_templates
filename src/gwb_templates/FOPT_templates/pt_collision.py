@@ -161,7 +161,7 @@ class PtCollision(AnalyticTemplate):
         self.spectral_index_IR: float = float(spectral_index_IR)
         self.spectral_index_UV: float = float(spectral_index_UV)
         self.transition_smoothness: float = float(transition_smoothness)
-        
+
         default_labels = {
             "log_K_tilde": r"$\log_{10}\tilde{K}$",
             "log_beta_over_H": r"$\log_{10}(\beta/H_*)$",
