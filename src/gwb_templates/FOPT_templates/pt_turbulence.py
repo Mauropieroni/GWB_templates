@@ -168,10 +168,10 @@ class PtTurbulence(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: jax.Array,
-        log_Omega_s: jax.Array,
-        log_R_H_star: jax.Array,
-        log_T_star: jax.Array,
+        frequency: ArrayLike,
+        log_Omega_s: ArrayLike,
+        log_R_H_star: ArrayLike,
+        log_T_star: ArrayLike,
     ) -> jax.Array:
         r"""Evaluate the MHD-turbulence FOPT spectrum at ``frequency``."""
         Omega_s = 10.0**log_Omega_s
