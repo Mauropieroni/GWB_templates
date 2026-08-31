@@ -5,7 +5,7 @@ Implements the broken power law from Eq. 14 of arXiv:1512.06239:
 
 .. math::
 
-    \Omega(f) = A\,x^{3}
+    \Omega_\mathrm{GW} h^2(f) = \Omega_* h^2\, x^{3}
         \left(\frac{7}{4 + 3 x^{2}}\right)^{7/2}, \qquad x = f / f_*.
 
 A two-parameter special case of the smooth BPL with fixed

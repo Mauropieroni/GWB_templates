@@ -6,7 +6,7 @@ first-order phase-transition (FOPT) GW background template:
 
 .. math::
 
-    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha}\,
+    \Omega_{\mathrm{GW}} h^2(f) = \Omega_* h^2\,
         x^{n_{\mathrm{IR}}}\,
         \left(\frac{1 + x}{2}\right)^{n_{\mathrm{UV}} - n_{\mathrm{IR}}}
 
