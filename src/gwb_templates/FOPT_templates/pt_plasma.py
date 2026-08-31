@@ -39,6 +39,49 @@ class PtPlasma(AnalyticTemplate):
     epsilon
         Fraction of bulk kinetic energy that feeds the MHD-turbulence
         source.
+
+    Configuration
+    -------------
+    amplitude_prefactor_sw
+        Numerical factor in the amplitude of the sound wave contribution. 
+        Defaults to `PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f_sw
+        Low-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f_sw
+        Intermediate-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f_sw
+        High-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f_sw
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f_sw
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
+    amplitude_prefactor_turb
+        Numerical factor in the amplitude of the turbulence contribution. 
+        Defaults to `PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f_turb
+        Low-frequency spectral index of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f_turb
+        Intermediate-frequency spectral index of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f_turb
+        High-frequency spectral index of the turbulencee contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f_turb
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f_turb
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
@@ -95,6 +138,22 @@ class PtPlasma(AnalyticTemplate):
 
     def __init__(
         self,
+        amplitude_prefactor_sw: float = PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f_sw: float =
+        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f_sw: float =
+        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4],
+        amplitude_prefactor_turb: float = PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f_turb: float =
+        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f_turb: float =
+        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4],
         *,
         model_name: str | None = None,
         model_label: str | None = None,
@@ -118,8 +177,22 @@ class PtPlasma(AnalyticTemplate):
 
         # Sub-template instances; reused on every call. Both are pure JAX,
         # so this is safe to construct once at init time.
-        self._sound_waves = PtSoundWaves()
-        self._turbulence = PtTurbulence()
+        self._sound_waves = PtSoundWaves(
+            float(amplitude_prefactor_sw),
+            float(spectral_index_low_f_sw),
+            float(spectral_index_mid_f_sw),
+            float(spectral_index_high_f_sw),
+            float(transition_smoothness_low_f_sw),
+            float(transition_smoothness_high_f_sw) 
+        )
+        self._turbulence = PtTurbulence(
+            float(amplitude_prefactor_turb),
+            float(spectral_index_low_f_turb),
+            float(spectral_index_mid_f_turb),
+            float(spectral_index_high_f_turb),
+            float(transition_smoothness_low_f_turb),
+            float(transition_smoothness_high_f_turb) 
+        )
 
         super().__init__(
             model_name=model_name,

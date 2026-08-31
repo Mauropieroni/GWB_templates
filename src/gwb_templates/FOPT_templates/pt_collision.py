@@ -80,14 +80,33 @@ class PtCollision(AnalyticTemplate):
         duration in Hubble units).
     log_T_star
         :math:`\log_{10}` of the transition temperature in GeV.
+
+    Configuration
+    -------------
+    a_b
+        Numerical factor :math:`A_b` in the amplitude at the break frequency. Defaults
+        to `PtCollision.DEFAULT_A_B`.
+    omega_b_over_beta
+        Angular frequency of the break, :math:`\omega_b = 2 \pi f_b` in units of the
+        inverse transition duration :math:`\beta`. Defaults to
+        `PtCollision.DEFAULT_OMEGA_B_OVER_BETA`.
+    spectral_index_IR
+        Low-frequency spectral index. Defaults to
+        `PtCollision.DEFAULT_SPECTRAL_INDEX_IR`.
+    spectral_index_UV
+        High-frequency spectral index. Defaults to
+        `PtCollision.DEFAULT_SPECTRAL_INDEX_UV`.
+    transition_smoothness
+        Smoothness of the transition between the two spectral slopes. Defaults to
+        `PtCollision.DEFAULT_TRANSITION_SMOOTHNESS`.
     """
 
-    #: Fixed spectral-shape constants (U(1)-symmetric scalar scenario).
-    A_B: ClassVar[float] = _A_B
-    OMEGA_B_OVER_BETA: ClassVar[float] = _OMEGA_B_OVER_BETA
-    SPECTRAL_INDEX_IR: ClassVar[float] = _N_1
-    SPECTRAL_INDEX_UV: ClassVar[float] = _N_2
-    TRANSITION_SMOOTHNESS: ClassVar[float] = _A_1
+    #: Defaults for fixed spectral-shape constants (U(1)-symmetric scalar scenario).
+    DEFAULT_A_B: ClassVar[float] = _A_B
+    DEFAULT_OMEGA_B_OVER_BETA: ClassVar[float] = _OMEGA_B_OVER_BETA
+    DEFAULT_SPECTRAL_INDEX_IR: ClassVar[float] = _N_1
+    DEFAULT_SPECTRAL_INDEX_UV: ClassVar[float] = _N_2
+    DEFAULT_TRANSITION_SMOOTHNESS: ClassVar[float] = _A_1
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -126,12 +145,23 @@ class PtCollision(AnalyticTemplate):
 
     def __init__(
         self,
+        a_b: float = DEFAULT_A_B,
+        omega_b_over_beta: float = DEFAULT_OMEGA_B_OVER_BETA,
+        spectral_index_IR: float = DEFAULT_SPECTRAL_INDEX_IR,
+        spectral_index_UV: float = DEFAULT_SPECTRAL_INDEX_UV,
+        transition_smoothness: float = DEFAULT_TRANSITION_SMOOTHNESS,
         *,
         model_name: str | None = None,
         model_label: str | None = None,
         parameter_labels: Mapping[str, str] | None = None,
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
+        self.a_b: float = float(a_b)
+        self.omega_b_over_beta: float = float(omega_b_over_beta)
+        self.spectral_index_IR: float = float(spectral_index_IR)
+        self.spectral_index_UV: float = float(spectral_index_UV)
+        self.transition_smoothness: float = float(transition_smoothness)
+        
         default_labels = {
             "log_K_tilde": r"$\log_{10}\tilde{K}$",
             "log_beta_over_H": r"$\log_{10}(\beta/H_*)$",
@@ -169,18 +199,18 @@ class PtCollision(AnalyticTemplate):
         T_star = 10.0**log_T_star
 
         h2FGW0 = redshift_omega(T_star)
-        h2Omega_b = h2FGW0 * self.A_B * K_tilde**2 / beta_over_H**2
+        h2Omega_b = h2FGW0 * self.a_b * K_tilde**2 / beta_over_H**2
 
         aH_star = a_hubble(T_star)
-        f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.OMEGA_B_OVER_BETA
+        f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
         return broken_power_law_a1(
             frequency,
             jnp.log10(h2Omega_b),
             jnp.log10(f_b),
-            self.SPECTRAL_INDEX_IR,
-            self.SPECTRAL_INDEX_UV,
-            self.TRANSITION_SMOOTHNESS,
+            self.spectral_index_IR,
+            self.spectral_index_UV,
+            self.transition_smoothness,
         )
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -204,9 +234,9 @@ class PtCollision(AnalyticTemplate):
         T_star = 10.0**log_T_star
 
         h2FGW0 = redshift_omega(T_star)
-        h2Omega_b = h2FGW0 * self.A_B * K_tilde**2 / beta_over_H**2
+        h2Omega_b = h2FGW0 * self.a_b * K_tilde**2 / beta_over_H**2
         aH_star = a_hubble(T_star)
-        f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.OMEGA_B_OVER_BETA
+        f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
         # Partials of broken_power_law_a1 w.r.t. (log_amplitude, log_f_b):
         # shape (..., 2)
@@ -214,9 +244,9 @@ class PtCollision(AnalyticTemplate):
             frequency,
             jnp.log10(h2Omega_b),
             jnp.log10(f_b),
-            self.SPECTRAL_INDEX_IR,
-            self.SPECTRAL_INDEX_UV,
-            self.TRANSITION_SMOOTHNESS,
+            self.spectral_index_IR,
+            self.spectral_index_UV,
+            self.transition_smoothness,
         )
 
         # d([log_h2Omega_b, log_f_b])
