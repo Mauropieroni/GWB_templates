@@ -6,3 +6,15 @@ build/
 dist/
 **/.vscode/
 **/.DS_Store
+
+# Ignore test files
+check_spectrum_w0.167.png
+check_spectrum_w0.667.png
+comparison-python-tex.png
+BPL.txt
+DBPL.txt
+double-peak.txt
+double-peak-v2.txt
+test_double_peak_2.py
+double_peak_evaporating_PBH_v2.py
+template-description.txt
