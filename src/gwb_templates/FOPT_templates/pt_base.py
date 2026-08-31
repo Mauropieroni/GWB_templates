@@ -21,6 +21,7 @@ import jax
 import jax.numpy as jnp
 
 # Temperature thresholds (GeV), in decreasing order — shared by both g_star tables.
+# Cf. Tab. 2 of Husdal, Galaxies 4 (2016), 4, 78 [arXiv:1609.04979 [astro-ph.CO]].
 _T_THRESHOLDS = [
     173.3,
     125.6,
@@ -39,6 +40,7 @@ _T_THRESHOLDS = [
 
 # Effective d.o.f. values for each interval;
 # last entry is the default (T below all thresholds).
+# Cf. Tab. 2 of Husdal, Galaxies 4 (2016), 4, 78 [arXiv:1609.04979 [astro-ph.CO]].
 _G_ENERGY = [
     106.75,
     96.25,
@@ -82,6 +84,10 @@ def g_star_energy(T: float | jax.Array) -> jax.Array:
     QCD transition (~0.16 GeV), electroweak symmetry breaking, and particle
     mass thresholds.
 
+    Based on Tab. 2 of
+    L. Husdal, "On Effective Degrees of Freedom in the Early Universe",
+    Galaxies 4 (2016) 4, 78; [arXiv:1609.04979 [astro-ph.CO]].
+
     Args:
         T: Temperature in GeV.
     Returns:
@@ -96,6 +102,10 @@ def g_star_entropy(T: float | jax.Array) -> jax.Array:
     """
     Effective number of entropic degrees of freedom as a piecewise-constant
     function of temperature T (in GeV).
+
+    Based on Tab. 2 of
+    L. Husdal, "On Effective Degrees of Freedom in the Early Universe",
+    Galaxies 4 (2016) 4, 78; [arXiv:1609.04979 [astro-ph.CO]].
 
     Args:
         T: Temperature in GeV.
