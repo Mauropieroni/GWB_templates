@@ -32,8 +32,11 @@ from gwb_templates.template import NumericalTemplate
 
 ArrayLike: TypeAlias = jtp.ArrayLike
 
+# with backreaction; should be used by default
 _DEFAULT_DATA_FILENAME = "Model-II-GBR_WOB-loggrid.dat"
-_PRIOR_DATA_FILENAME = "Model-II_BOS-loggrid.dat" #included for historical comparisons
+# without backreaction; included for historical comparisons
+_PRIOR_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
+
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
@@ -212,7 +215,7 @@ class CosmicStringModelII(NumericalTemplate):
     year = "2014"
 }
 """,
-       r"""
+        r"""
 @article{Wachter:2024zly,
     author = "Wachter, Jeremy M. and Olum, Ken D. and Blanco-Pillado, Jose J.",
     title = "{More accurate gravitational wave backgrounds from cosmic strings}",
@@ -226,7 +229,7 @@ class CosmicStringModelII(NumericalTemplate):
     pages = "083533",
     year = "2026"
 }
-"""
+""",
     )
 
     def __init__(
