@@ -141,7 +141,7 @@ def _bilinear_dS_dix(
 
 class CosmicStringModelII(NumericalTemplate):
     r"""
-    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`; 
+    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`;
     arXiv:2411.16590, gravitational backreaction)
 
     1-parameter model evaluated from a precomputed data grid via bilinear
@@ -154,7 +154,7 @@ class CosmicStringModelII(NumericalTemplate):
         :math:`\log_{10}` of the string tension :math:`G\mu`. Grid range
         :math:`-22 \le \log G\mu \le -8` for the version with backreaction,
         :math:`-18 \le \log G\mu \le -9.5` for the version without.
-    
+
     Notes on data
     -------------
     The default data file loads the version of the GWB accounting for
