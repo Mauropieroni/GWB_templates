@@ -34,7 +34,7 @@ ArrayLike: TypeAlias = jtp.ArrayLike
 
 # with backreaction; should be used by default
 _DEFAULT_DATA_FILENAME = "Model-II-GBR_WOB-loggrid.dat"
-# without backreaction; included for historical comparisons
+# without backreaction; included for historical comparisons and Abelian-Higgs Model II
 _PRIOR_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
 
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -391,7 +391,7 @@ class AbelianHiggsModelII(NumericalTemplate):
 
     def __init__(
         self,
-        data_filename: str = _DEFAULT_DATA_FILENAME,
+        data_filename: str = _PRIOR_DATA_FILENAME,
         *,
         model_name: str | None = None,
         model_label: str | None = None,
