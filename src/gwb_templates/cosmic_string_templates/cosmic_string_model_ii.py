@@ -1,5 +1,6 @@
 """
-Cosmic String Model II (1 parameter) and Abelian Higgs Model II (2 parameters).
+Cosmic String Model II with and without gravitational self-interaction effects
+(1 parameter) and Abelian Higgs Model II (2 parameters).
 
 Model II uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and
 evaluates h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic
@@ -11,6 +12,9 @@ Reference: arXiv:1309.6637 (Blanco-Pillado, Olum & Shlaer — original BOS
            to LISA cosmic-string forecasts);
            arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction
            pipeline and physics interpretation).
+           arXiv:2411:16590 (Wachter, Olum, & Blanco-Pillado — method for
+           constructing the GWB with gravitational self-interaction
+           (backreaction) effects included
 """
 
 from __future__ import annotations
@@ -28,7 +32,11 @@ from gwb_templates.template import NumericalTemplate
 
 ArrayLike: TypeAlias = jtp.ArrayLike
 
-_DEFAULT_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
+# with backreaction; should be used by default
+_DEFAULT_DATA_FILENAME = "Model-II-GBR_WOB-loggrid.dat"
+# without backreaction; included for historical comparisons and Abelian-Higgs Model II
+_PRIOR_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
+
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
@@ -133,7 +141,8 @@ def _bilinear_dS_dix(
 
 class CosmicStringModelII(NumericalTemplate):
     r"""
-    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`).
+    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`;
+    arXiv:2411.16590, gravitational backreaction)
 
     1-parameter model evaluated from a precomputed data grid via bilinear
     interpolation. The template is JAX-differentiable since the interpolation
@@ -143,7 +152,15 @@ class CosmicStringModelII(NumericalTemplate):
     ---------------
     log_Gmu
         :math:`\log_{10}` of the string tension :math:`G\mu`. Grid range
-        :math:`-18 \le \log G\mu \le -9.5`.
+        :math:`-22 \le \log G\mu \le -8` for the version with backreaction,
+        :math:`-18 \le \log G\mu \le -9.5` for the version without.
+
+    Notes on data
+    -------------
+    The default data file loads the version of the GWB accounting for
+    backreaction. It has support in :math:`-5 \le \log f \le 3` and can be used
+    for LISA and ET explorations. There is also a version without backreaction,
+    filename _PRIOR_DATA_FILENAME, with support in :math:`-5 \le \log f \le 0`.
     """
 
     jittable: ClassVar[bool] = True
@@ -196,6 +213,21 @@ class CosmicStringModelII(NumericalTemplate):
     number = "2",
     pages = "023512",
     year = "2014"
+}
+""",
+        r"""
+@article{Wachter:2024zly,
+    author = "Wachter, Jeremy M. and Olum, Ken D. and Blanco-Pillado, Jose J.",
+    title = "{More accurate gravitational wave backgrounds from cosmic strings}",
+    eprint = "2411.16590",
+    archivePrefix = "arXiv",
+    primaryClass = "gr-qc",
+    doi = "10.1103/c6vr-nh41",
+    journal = "Phys. Rev. D",
+    volume = "113",
+    number = "8",
+    pages = "083533",
+    year = "2026"
 }
 """,
     )
@@ -359,7 +391,7 @@ class AbelianHiggsModelII(NumericalTemplate):
 
     def __init__(
         self,
-        data_filename: str = _DEFAULT_DATA_FILENAME,
+        data_filename: str = _PRIOR_DATA_FILENAME,
         *,
         model_name: str | None = None,
         model_label: str | None = None,
