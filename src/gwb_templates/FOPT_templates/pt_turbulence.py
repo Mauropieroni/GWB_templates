@@ -51,14 +51,35 @@ class PtTurbulence(AnalyticTemplate):
         :math:`\log_{10}` of the bubble size times the Hubble rate.
     log_T_star
         :math:`\log_{10}` of the transition temperature in GeV.
+
+    Configuration
+    -------------
+    amplitude_prefactor
+        Numerical factor in the amplitude. Defaults to
+        `PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f
+        Low-frequency spectral index. Defaults to
+        `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f
+        Intermediate-frequency spectral index. Defaults to
+        `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f
+        High-frequency spectral index. Defaults to
+        `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes. Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes. Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
 
-    #: Spectral amplitude prefactor (Roper Pol et al. 2022).
-    AMPLITUDE_PREFACTOR: ClassVar[float] = 0.085
+    #: Default spectral amplitude prefactor (Roper Pol et al. 2022).
+    DEFAULT_AMPLITUDE_PREFACTOR: ClassVar[float] = 0.085
     #: Eddy-turnover scaling N_eddy.
     N_EDDY: ClassVar[float] = 2.0
-    #: Fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
-    SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
+    #: Default values for fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
+    DEFAULT_SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
         3.0,
         1.0,
         -8.0,
@@ -67,6 +88,25 @@ class PtTurbulence(AnalyticTemplate):
     )
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Caprini:2024hue,
+    author = "Caprini, Chiara and Jinno, Ryusuke and Lewicki, Marek and Madge, Eric
+        and Merchand, Marco and Nardini, Germano and Pieroni, Mauro and Roper Pol,
+        Alberto and Vaskonen, Ville",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from first-order phase transitions in LISA:
+        reconstruction pipeline and physics interpretation}",
+    eprint = "2403.03723",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-01, CERN-TH-2024-029",
+    doi = "10.1088/1475-7516/2024/10/020",
+    journal = "JCAP",
+    volume = "10",
+    pages = "020",
+    year = "2024"
+}
+""",
         r"""
 @article{RoperPol:2022iel,
     author = "Roper Pol, Alberto and Caprini, Chiara and Neronov, Andrii and Semikoz,
@@ -117,12 +157,27 @@ class PtTurbulence(AnalyticTemplate):
 
     def __init__(
         self,
+        amplitude_prefactor: float = DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f: float = DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[4],
         *,
         model_name: str | None = None,
         model_label: str | None = None,
         parameter_labels: Mapping[str, str] | None = None,
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
+        self.amplitude_prefactor: float = float(amplitude_prefactor)
+        self.spectral_exponents: tuple[float, float, float, float, float] = (
+            float(spectral_index_low_f),
+            float(spectral_index_mid_f),
+            float(spectral_index_high_f),
+            float(transition_smoothness_low_f),
+            float(transition_smoothness_high_f),
+        )
+
         default_labels = {
             "log_Omega_s": r"$\log_{10}\Omega_s$",
             "log_R_H_star": r"$\log_{10}(R_* H_*)$",
@@ -149,10 +204,10 @@ class PtTurbulence(AnalyticTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: jax.Array,
-        log_Omega_s: jax.Array,
-        log_R_H_star: jax.Array,
-        log_T_star: jax.Array,
+        frequency: ArrayLike,
+        log_Omega_s: ArrayLike,
+        log_R_H_star: ArrayLike,
+        log_T_star: ArrayLike,
     ) -> jax.Array:
         r"""Evaluate the MHD-turbulence FOPT spectrum at ``frequency``."""
         Omega_s = 10.0**log_Omega_s
@@ -169,10 +224,10 @@ class PtTurbulence(AnalyticTemplate):
         f_2 = 2.2 * aH_star / R_H_star
         r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
 
-        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        n_1, n_2, n_3, a_1, a_2 = self.spectral_exponents
         norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
         prefactor = (
-            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
+            3.0 * self.amplitude_prefactor * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
         )
         h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
 
@@ -216,10 +271,10 @@ class PtTurbulence(AnalyticTemplate):
         f_2 = 2.2 * aH_star / R_H_star
         r_f = f_2 / f_1  # = 2.2 * N_eddy / vA
 
-        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        n_1, n_2, n_3, a_1, a_2 = self.spectral_exponents
         norm = r_f**3 * (1.0 + r_f**a_1) ** (-2.0 / a_1) * 2.0 ** (-11.0 / 3.0 / a_2)
         prefactor = (
-            3.0 * self.AMPLITUDE_PREFACTOR * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
+            3.0 * self.amplitude_prefactor * norm / (4.0 * jnp.pi**2 * self.N_EDDY)
         )
         h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
 

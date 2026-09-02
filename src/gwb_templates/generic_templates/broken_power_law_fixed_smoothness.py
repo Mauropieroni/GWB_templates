@@ -8,7 +8,7 @@ low-frequency tilt :math:`n_1`, high-frequency tilt :math:`n_2`.
 
 .. math::
 
-    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha}\,
+    \Omega_{\mathrm{GW}} h^2(f) = \Omega_* h^2\,
         x^{n_1}\,
         \left(\tfrac{1+x}{2}\right)^{n_2 - n_1},
     \qquad x = f / f_*.

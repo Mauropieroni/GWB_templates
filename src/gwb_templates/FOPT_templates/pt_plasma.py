@@ -39,13 +39,124 @@ class PtPlasma(AnalyticTemplate):
     epsilon
         Fraction of bulk kinetic energy that feeds the MHD-turbulence
         source.
+
+    Configuration
+    -------------
+    amplitude_prefactor_sw
+        Numerical factor in the amplitude of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f_sw
+        Low-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f_sw
+        Intermediate-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f_sw
+        High-frequency spectral index of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f_sw
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f_sw
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes of the sound wave contribution.
+        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
+    amplitude_prefactor_turb
+        Numerical factor in the amplitude of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f_turb
+        Low-frequency spectral index of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f_turb
+        Intermediate-frequency spectral index of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f_turb
+        High-frequency spectral index of the turbulencee contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f_turb
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f_turb
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes of the turbulence contribution.
+        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
 
-    # TODO: cite
-    bibtex_entries: ClassVar[tuple[str, ...]] = ()
+    bibtex_entries: ClassVar[tuple[str, ...]] = (
+        r"""
+@article{Caprini:2024hue,
+    author = "Caprini, Chiara and Jinno, Ryusuke and Lewicki, Marek and Madge, Eric
+        and Merchand, Marco and Nardini, Germano and Pieroni, Mauro and Roper Pol,
+        Alberto and Vaskonen, Ville",
+    collaboration = "LISA Cosmology Working Group",
+    title = "{Gravitational waves from first-order phase transitions in LISA:
+        reconstruction pipeline and physics interpretation}",
+    eprint = "2403.03723",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "LISA-COSWG-24-01, CERN-TH-2024-029",
+    doi = "10.1088/1475-7516/2024/10/020",
+    journal = "JCAP",
+    volume = "10",
+    pages = "020",
+    year = "2024"
+}
+""",
+        r"""
+@article{Caprini:2019egz,
+    author = "Caprini, Chiara and others",
+    title = "{Detecting gravitational waves from cosmological phase transitions with
+        LISA: an update}",
+    eprint = "1910.13125",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "DESY-19-159, IPPP/19/27, HIP-2019-14/TH, MITP/19-066,
+        IFT-UAM/CSIC-19-139",
+    doi = "10.1088/1475-7516/2020/03/024",
+    journal = "JCAP",
+    volume = "03",
+    pages = "024",
+    year = "2020"
+}
+""",
+        r"""
+@article{Caprini:2015zlo,
+    author = "Caprini, Chiara and others",
+    title = "{Science with the space-based interferometer eLISA. II: Gravitational waves
+        from cosmological phase transitions}",
+    eprint = "1512.06239",
+    archivePrefix = "arXiv",
+    primaryClass = "astro-ph.CO",
+    reportNumber = "DESY-15-246",
+    doi = "10.1088/1475-7516/2016/04/001",
+    journal = "JCAP",
+    volume = "04",
+    pages = "001",
+    year = "2016"
+}
+""",
+    )
 
     def __init__(
         self,
+        amplitude_prefactor_sw: float = PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f_sw: float =
+        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f_sw: float =
+        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4],
+        amplitude_prefactor_turb: float = PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f_turb: float =
+        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f_turb: float =
+        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4],
         *,
         model_name: str | None = None,
         model_label: str | None = None,
@@ -69,8 +180,22 @@ class PtPlasma(AnalyticTemplate):
 
         # Sub-template instances; reused on every call. Both are pure JAX,
         # so this is safe to construct once at init time.
-        self._sound_waves = PtSoundWaves()
-        self._turbulence = PtTurbulence()
+        self._sound_waves = PtSoundWaves(
+            float(amplitude_prefactor_sw),
+            float(spectral_index_low_f_sw),
+            float(spectral_index_mid_f_sw),
+            float(spectral_index_high_f_sw),
+            float(transition_smoothness_low_f_sw),
+            float(transition_smoothness_high_f_sw)
+        )
+        self._turbulence = PtTurbulence(
+            float(amplitude_prefactor_turb),
+            float(spectral_index_low_f_turb),
+            float(spectral_index_mid_f_turb),
+            float(spectral_index_high_f_turb),
+            float(transition_smoothness_low_f_turb),
+            float(transition_smoothness_high_f_turb)
+        )
 
         super().__init__(
             model_name=model_name,

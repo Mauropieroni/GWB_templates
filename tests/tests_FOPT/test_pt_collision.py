@@ -9,8 +9,10 @@ from gwb_templates.template import get_template_from_registry
 N_FREQ = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
+# a_b, omega_b_over_beta, spectral_index_IR, spectral_index_UV, transition_smoothness
+HYPERPARS = jnp.array([0.05, 0.7, 2.4, -2.4, 1.2])
 # New registry API
-model = get_template_from_registry("PtCollision")
+model = get_template_from_registry("PtCollision", *HYPERPARS)
 # log_K_tilde, log_beta_over_H, log_T_star
 PARS = jnp.array([-1.0, 2.0, 2.0])
 
