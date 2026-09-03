@@ -3,7 +3,7 @@ name = "gwb_templates"
 version = "0.1.0"
 description = "A package with GWB templates."
 authors = [{ name = "Mauro Pieroni", email = "mauro.pieroni@csic.es" }]
-license = { text = "MIT" }
+license = { text = "GPL-3.0" }
 dependencies = ["jax>=0.5.0", "numpy>=1.21", "scipy>=1.7", "interpax>=0.1.0"]
 
 [build-system]
