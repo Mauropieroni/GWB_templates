@@ -1,17 +1,14 @@
 """
-Cosmic String Model II (1 parameter).
+Cosmic String Model III (1 parameter).
 
-Uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and evaluates
-h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic differentiation
-works. See :mod:`abelian_higgs_model_ii` for the amplitude-scaled variant built on
-this module's grid and interpolation primitives.
+Model III uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and
+evaluates h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic
+differentiation works.
 
-Reference: arXiv:1309.6637 (Blanco-Pillado, Olum & Shlaer — original BOS
-           loop-number-density distribution);
-           arXiv:1909.00819 (Auclair et al. — BOS P_n distribution applied
-           to LISA cosmic-string forecasts);
-           arXiv:2405.03740 (GW from cosmic strings in LISA: reconstruction
-           pipeline and physics interpretation).
+Reference: arXiv:astro-ph/0511646 (Ringeval, Sakellariadou & Bouchet — Nambu-Goto
+simulations);
+           arXiv:1006.0931 (Lorenz, Ringeval & Sakellariadou — LRS Loop distribution);
+           arXiv:1903.06685 (Auclair et al. — Extension of the model).
 """
 
 from __future__ import annotations
@@ -22,21 +19,22 @@ from typing import Any, ClassVar, TypeAlias
 
 import jax
 import jax.numpy as jnp
+import jax.typing as jtp
 import numpy as np
 
-from gwb_templates.template import NumericalTemplate, DifferentiationBackend
+from gwb_templates.template import NumericalTemplate
 from gwb_templates.utils import bilinear_interp as _bilinear_interp
 from gwb_templates.utils import to_frac_ix as _to_frac_ix
 
-ArrayLike: TypeAlias = float | int | np.ndarray | jax.Array
+ArrayLike: TypeAlias = jtp.ArrayLike
 
-_DEFAULT_DATA_FILENAME = "Model-II_BOS-loggrid.dat"
+_DEFAULT_DATA_FILENAME = "Model-III_LRS-loggrid.dat"
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
 
 def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
     """
-    Load the precomputed Model II data grid.
+    Load the precomputed Model III data grid.
 
     Layout of the .dat file:
       * Row 0, cols 1..  → log10_frequency axis
@@ -57,13 +55,13 @@ def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
 # ── Template classes ──────────────────────────────────────────────────────────
 
 
-class CosmicStringModelII(NumericalTemplate):
+class CosmicStringModelIII(NumericalTemplate):
     r"""
-    Cosmic String Model II (arXiv:1909.00819, BOS :math:`P_n`).
+    Cosmic String Model III (arXiv:1006.0931, Cusp dominated :math:`P_n`).
 
-    1-parameter model evaluated from a precomputed data grid via bilinear interpolation.
-    The template is JAX-differentiable since the interpolation is implemented in pure
-    JAX.
+    1-parameter model evaluated from a precomputed data grid via bilinear
+    interpolation. The template is JAX-differentiable since the interpolation
+    is implemented in pure JAX.
 
     Free parameters
     ---------------
@@ -73,56 +71,51 @@ class CosmicStringModelII(NumericalTemplate):
     """
 
     jittable: ClassVar[bool] = True
-    differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
+    differentiation_backend: ClassVar[str] = "autodiff"
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
-@article{Auclair:2019wcv,
-    author = "Auclair, Pierre and others",
-    title = "{Probing the gravitational wave background from cosmic strings with
-        LISA}",
-    eprint = "1909.00819",
+@article{Ringeval:2005kr,
+    author = "Ringeval, Christophe and Sakellariadou, Mairi and Bouchet, Francois",
+    title = "{Cosmological evolution of cosmic string loops}",
+    eprint = "astro-ph/0511646",
     archivePrefix = "arXiv",
-    primaryClass = "astro-ph.CO",
-    doi = "10.1088/1475-7516/2020/04/034",
+    doi = "10.1088/1475-7516/2007/02/023",
     journal = "JCAP",
-    volume = "04",
-    pages = "034",
-    year = "2020"
+    volume = "02",
+    pages = "023",
+    year = "2007"
 }
 """,
         r"""
-@article{Blanco-Pillado:2024aca,
-    author = "Blanco-Pillado, Jose J. and Cui, Yanou and Kuroyanagi, Sachiko and
-        Lewicki, Marek and Nardini, Germano and Pieroni, Mauro and Rybak, Ivan Yu. and
-        Sousa, Lara and Wachter, Jeremy M.",
-    collaboration = "LISA Cosmology Working Group",
-    title = "{Gravitational waves from cosmic strings in LISA: reconstruction pipeline
-        and physics interpretation}",
-    eprint = "2405.03740",
+@article{Lorenz:2010sm,
+    author = "Lorenz, Larissa and Ringeval, Christophe and Sakellariadou, Mairi",
+    title = "{Cosmic string loop distribution on all length scales and at any redshift
+        }",
+    eprint = "1006.0931",
     archivePrefix = "arXiv",
     primaryClass = "astro-ph.CO",
-    reportNumber = "LISA-COSWG-24-02, CERN-TH-2024-085",
-    doi = "10.1088/1475-7516/2025/05/006",
+    doi = "10.1088/1475-7516/2010/10/003",
     journal = "JCAP",
-    volume = "05",
-    pages = "006",
-    year = "2025"
+    volume = "10",
+    pages = "003",
+    year = "2010"
 }
 """,
         r"""
-@article{Blanco-Pillado:2013qja,
-    author = "Blanco-Pillado, Jose J. and Olum, Ken D. and Shlaer, Benjamin",
-    title = "{The number of cosmic string loops}",
-    eprint = "1309.6637",
+@article{Auclair:2019zoz,
+    author = "Auclair, Pierre and Ringeval, Christophe and Sakellariadou, Mairi and
+    Steer, Daniele",
+    title = "{Cosmic string loop production functions}",
+    eprint = "1903.06685",
     archivePrefix = "arXiv",
     primaryClass = "astro-ph.CO",
-    doi = "10.1103/PhysRevD.89.023512",
-    journal = "Phys. Rev. D",
-    volume = "89",
-    number = "2",
-    pages = "023512",
-    year = "2014"
+    reportNumber = "KCL-PH-TH/2019-19",
+    doi = "10.1088/1475-7516/2019/06/015",
+    journal = "JCAP",
+    volume = "06",
+    pages = "015",
+    year = "2019"
 }
 """,
     )
@@ -156,7 +149,7 @@ class CosmicStringModelII(NumericalTemplate):
         super().__init__(
             model_name=model_name,
             model_label=(
-                model_label if model_label is not None else "Cosmic String Model II"
+                model_label if model_label is not None else "Cosmic String Model III"
             ),
             parameter_labels=(
                 parameter_labels if parameter_labels is not None else default_labels
@@ -178,7 +171,7 @@ class CosmicStringModelII(NumericalTemplate):
         frequency: ArrayLike,
         log_Gmu: ArrayLike,
     ) -> jax.Array:
-        r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
+        r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model III."""
         log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
