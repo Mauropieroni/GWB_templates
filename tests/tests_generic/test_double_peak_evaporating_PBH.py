@@ -12,7 +12,7 @@ fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
 model = get_template_from_registry("EvaporatingPBHDoublyPeaked")
 # log_m_pbh, log_beta, w, gamma, log_a_s, n_s
-PARS = jnp.array([4.0, -4.0, 2.0/3.0, 0.2, -9, 0.97])
+PARS = jnp.array([4.0, -4.0, 2.0 / 3.0, 0.2, -9, 0.97])
 
 
 class TestDoublePeakEvaporatingPBH(unittest.TestCase):

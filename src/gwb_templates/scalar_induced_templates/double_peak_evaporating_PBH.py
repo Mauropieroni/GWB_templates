@@ -20,7 +20,7 @@ multiplied by the analogous window Theta_uv_ad(f; n_eff).
 Reference: G. Domenech and J. Traenkle, Phys. Rev. D 111, 063528 (2025),
 arXiv:2409.12125 [Domenech:2024wao].
 
-NOTES: 
+NOTES:
   - xi_1(beta, w) has no closed-form fit and is fixed to a constant (default 1.0).
   - g_*(T_rh) is fixed to the standard-model value 106.75 rather than
     computed self-consistently from M_PBH.
@@ -107,6 +107,7 @@ def _xi2_of_w(w: jax.Array, b: jax.Array) -> jax.Array:
     exp_stiff = (1.0 + 3.0 * w) / (3.0 + 3.0 * w)
     return jnp.where(w < 1.0 / 3.0, base**exp_soft, base**exp_stiff)
 
+
 def _log10_beta_max(
     log_m_pbh: ArrayLike,
     w: jax.Array,
@@ -136,17 +137,15 @@ def _log10_beta_min(
     """
     log10_m_pl = math.log10(4.34e-6)
 
-    return (
-        (2.0 * w / (1.0 + w))
-        * (
-            math.log10(3.8 * math.pi / 480.0)
-            + math.log10(108.0)
-            - math.log10(1.0 + w)
-            - math.log10(2.0 * math.pi)
-            - jnp.log10(gamma)
-            + 2.0 * (log10_m_pl - log_m_pbh)
-        )
+    return (2.0 * w / (1.0 + w)) * (
+        math.log10(3.8 * math.pi / 480.0)
+        + math.log10(108.0)
+        - math.log10(1.0 + w)
+        - math.log10(2.0 * math.pi)
+        - jnp.log10(gamma)
+        + 2.0 * (log10_m_pl - log_m_pbh)
     )
+
 
 # ---------------------------------------------------------------------------
 # log10-amplitude and log10-frequency building blocks
@@ -352,9 +351,10 @@ def _theta_uv_iso(
     z = c_s2 * s0**2
     c_s4 = c_s2**2
     hyp = _hyp2f1_series(5.0 / 6.0, 1.0, 1.5, z, n_terms=n_terms)
-    numerator = 3.0 * s0 * (5.0 * c_s4 - 2.0 * c_s2 * (2.0 * s0**2 + 5.0) + 9.0) - (
-        5.0 * c_s2 * (c_s2 + 6.0) - 27.0
-    ) * s0 * (c_s2 * s0**2 - 1.0) * hyp
+    numerator = (
+        3.0 * s0 * (5.0 * c_s4 - 2.0 * c_s2 * (2.0 * s0**2 + 5.0) + 9.0)
+        - (5.0 * c_s2 * (c_s2 + 6.0) - 27.0) * s0 * (c_s2 * s0**2 - 1.0) * hyp
+    )
     denominator = 10.0 * c_s4 * (1.0 - z) ** (2.0 / 3.0)
     return numerator / denominator
 
@@ -366,11 +366,7 @@ def _theta_uv_ad(
     hyp1 = _hyp2f1_series(2.5, -n_eff, 3.5, z, n_terms=n_terms)
     hyp2 = _hyp2f1_series(1.5, -n_eff, 2.5, z, n_terms=n_terms)
     hyp3 = _hyp2f1_series(0.5, -n_eff, 1.5, z, n_terms=n_terms)
-    return (
-        (2.0 / 5.0) * s0**5 * hyp1
-        - (4.0 / 3.0) * s0**3 * hyp2
-        + 2.0 * s0 * hyp3
-    )
+    return (2.0 / 5.0) * s0**5 * hyp1 - (4.0 / 3.0) * s0**3 * hyp2 + 2.0 * s0 * hyp3
 
 
 def _s0_of_f(
@@ -467,7 +463,8 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         r"""
 @article{Domenech:2024wao,
     author = {Dom{\`e}nech, Guillem and Tr{\"a}nkle, Jan},
-    title = "{From formation to evaporation: Induced gravitational wave probes of the primordial black hole reheating scenario}",
+    title = "{From formation to evaporation: Induced gravitational wave
+        probes of the primordial black hole reheating scenario}",
     eprint = "2409.12125",
     archivePrefix = "arXiv",
     primaryClass = "gr-qc",
@@ -617,7 +614,7 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         logp_beta = -jnp.log(beta_width)
 
         return jnp.where(valid, logp_beta, -jnp.inf)
-    
+
     def _isocurvature_params(
         self,
         log_m_pbh: ArrayLike,
@@ -674,9 +671,9 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         # physical mid-branch value at f_br2 is Omega_ad_mid*(f_br2/f_uv)^5;
         # this equals the UV-branch value there by construction of f_br2.
         log_amp_ad = log_omega_ad_ir + (log_f_br1 - log_f_uv)
-        #log_amp_ad = (log_omega_ad_ir - 4.0 * (log_f_br1 - log_f_uv)
+        # log_amp_ad = (log_omega_ad_ir - 4.0 * (log_f_br1 - log_f_uv)
         #            + 5.0 * (log_f_br2 - log_f_uv))
-        #log_amp_ad = log_omega_ad_ir + log_f_uv - log_f_br2
+        # log_amp_ad = log_omega_ad_ir + log_f_uv - log_f_br2
 
         return log_amp_ad, log_f_br1, log_f_br2, n_eff
 
@@ -774,9 +771,7 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             11.0 / 3.0,
             self._bpl_log_transition,
         )
-        window_iso = _window_iso(
-            frequency_arr, log_f_uv, n_terms=self._hyp2f1_n_terms
-        )
+        window_iso = _window_iso(frequency_arr, log_f_uv, n_terms=self._hyp2f1_n_terms)
 
         log_amp_ad, log_f_br1, log_f_br2, n_eff = self._adiabatic_params(
             log_m_pbh, log_beta, w_arr, gamma, log_a_s, n_s, log_f_uv
@@ -834,5 +829,3 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             log_m_pbh, log_beta, w, gamma, log_a_s, n_s
         )
         return jnp.stack(jac, axis=-1)
-    
-    
