@@ -5,7 +5,6 @@ from typing import Any, TypeAlias
 import os
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 import numpy as np
 from interpax import Interpolator1D
 
@@ -13,7 +12,7 @@ from collections.abc import Iterable
 
 Array: TypeAlias = jax.Array
 AnyArray: TypeAlias = jax.Array | np.ndarray
-ArrayLike: TypeAlias = jtp.ArrayLike
+ArrayLike: TypeAlias = float | int | np.ndarray | jax.Array
 TemplateFn: TypeAlias = Callable[..., Array]
 IndexedDerivativeFn: TypeAlias = Callable[..., Array]
 
@@ -97,7 +96,7 @@ def hessian_autodiff(
 
 def finite_difference_grad_theta(
     function: IndexedDerivativeFn,
-    frequency: Array,
+    frequency: float | Array,
     parameters: ArrayLike,
     *args: Any,
     step: float = 1e-6,
