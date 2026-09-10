@@ -47,7 +47,7 @@ _G_ENTROPY_LOW_T = 3.91
 
 
 def _get_eos_slope(eos: float) -> float:
-    """High-frequency spectral tilt induced by a non-standard EOS w (Eq. B.1)."""
+    """High-frequency spectral tilt induced by a non-standard EOS w (Eq. 2.9)."""
     if eos <= 1.0 / 9.0:
         return 1.0
     return -2.0 * (3.0 * eos - 1.0) / (3.0 * eos + 1.0)
