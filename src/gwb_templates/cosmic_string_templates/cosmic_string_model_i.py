@@ -59,39 +59,39 @@ def _hyperharmonic(r: float, N: float | np.ndarray) -> float | np.ndarray:
 
 
 def _get_epsilon_r(Gmu: float, alpha: float) -> float:
-    """Radiation-era loop size ratio eps_r (Eq. A.4)."""
+    """Radiation-era loop size ratio eps_r (Eq. A.3)."""
     return alpha / _Gamma / Gmu
 
 
 def _get_epsilon_m(Gmu: float, alpha: float) -> float:
-    """Matter-era loop size ratio eps_m (Eq. A.4)."""
+    """Matter-era loop size ratio eps_m (Eq. A.3)."""
     return _get_epsilon_r(Gmu, alpha) * _xi_m / _xi_r
 
 
 def _get_gamma_m(Gmu: float, alpha: float) -> float:
-    """Matter-era loop-size enhancement factor gamma_m (Eq. A.4)."""
+    """Matter-era loop-size enhancement factor gamma_m (Eq. A.3)."""
     return 1.0 + 1.0 / _get_epsilon_m(Gmu, alpha)
 
 
 def _get_beta_m(Gmu: float, alpha: float) -> float:
-    """Matter-era shape factor beta_m (Eq. A.4)."""
+    """Matter-era shape factor beta_m (Eq. A.3)."""
     eps_m = _get_epsilon_m(Gmu, alpha)
     return (1.0 + 1.0 / _get_gamma_m(Gmu, alpha)) / eps_m
 
 
 def _get_D(nu_i: float, Omega_i: float, Gmu: float) -> float:
-    """Characteristic frequency scale D_i (Eq. A.4)."""
+    """Characteristic frequency scale D_i (Eq. A.3)."""
     return 2.0 * ct.H0_eV * np.sqrt(Omega_i) / nu_i / _Gamma / Gmu
 
 
 def _get_f_min_r(Gmu: float, alpha: float) -> float:
-    """Min. frequency from radiation-era loops (after Eq. A.5)."""
+    """Min. frequency from radiation-era loops (after Eq. A.3)."""
     D_r = _get_D(_nu_r, ct.Omega_R, Gmu)
     return D_r * (ct.Omega_M / ct.Omega_R) / _get_epsilon_r(Gmu, alpha)
 
 
 def _get_f_min_m(Gmu: float, alpha: float) -> float:
-    """Min. frequency from matter-era loops (after Eq. A.5)."""
+    """Min. frequency from matter-era loops (after Eq. A.3)."""
     D_m = _get_D(_nu_m, ct.Omega_M, Gmu)
     return D_m / _get_epsilon_m(Gmu, alpha)
 
@@ -122,30 +122,30 @@ def _get_A_n(f_eV: np.ndarray, Gmu: float, alpha: float, epoch: int) -> np.ndarr
 
 
 def _get_tilde_A_rm(f_eV: np.ndarray, Gmu: float) -> np.ndarray:
-    """Rad-to-matter transition bound tilde-A_rm (Eq. A.4)."""
+    """Rad-to-matter transition bound tilde-A_rm (Eq. A.3)."""
     D_m = _get_D(_nu_m, ct.Omega_M, Gmu)
     return (D_m * np.sqrt(ct.Omega_M / ct.Omega_R)) / f_eV
 
 
 def _get_tilde_A_m(f_eV: np.ndarray, Gmu: float) -> np.ndarray:
-    """Matter-era integration bound tilde-A_m (Eq. A.4)."""
+    """Matter-era integration bound tilde-A_m (Eq. A.3)."""
     return _get_D(_nu_m, ct.Omega_M, Gmu) / f_eV
 
 
 def _get_C_i(xi_i: float, v_i: float) -> float:
-    """Spectral amplitude coefficient C_i (Eq. A.4)."""
+    """Spectral amplitude coefficient C_i (Eq. A.3)."""
     return _c_tilde * _mathcal_F * v_i / xi_i**3 / np.sqrt(2.0)
 
 
 def _get_C_r_no_dof(Gmu: float, alpha: float) -> float:
-    """Radiation-era amplitude prefactor C_r without DOF changes (Eq. A.4)."""
+    """Radiation-era amplitude prefactor C_r without DOF changes (Eq. A.3)."""
     eps_r = _get_epsilon_r(Gmu, alpha)
     C_r = _get_C_i(_xi_r, _v_r)
     return 128.0 / 9.0 * np.pi * C_r * ct.Omega_R * (1.0 + eps_r) ** 1.5 / eps_r * Gmu
 
 
 def _get_C_rm(f_eV: np.ndarray, Gmu: float, alpha: float) -> np.ndarray:
-    """Rad-to-matter transition amplitude C_rm (Eq. A.4)."""
+    """Rad-to-matter transition amplitude C_rm (Eq. A.3)."""
     eps_r = _get_epsilon_r(Gmu, alpha)
     return (
         32.0
@@ -161,7 +161,7 @@ def _get_C_rm(f_eV: np.ndarray, Gmu: float, alpha: float) -> np.ndarray:
 
 
 def _get_C_m(f_eV: np.ndarray, Gmu: float, alpha: float) -> np.ndarray:
-    """Matter-era amplitude coefficient C_m (Eq. A.4)."""
+    """Matter-era amplitude coefficient C_m (Eq. A.3)."""
     eps_m = _get_epsilon_m(Gmu, alpha)
     return (
         162.0
