@@ -39,6 +39,7 @@ from gwb_templates.FOPT_templates import pt_turbulence  # noqa: F401
 
 # ── Inflation ─────────────────────────────────────────────────────────────────
 from gwb_templates.inflation_templates import axion_inflation  # noqa: F401
+from gwb_templates.inflation_templates import axion_inflation_matern52  # noqa: F401
 from gwb_templates.inflation_templates import double_peak  # noqa: F401
 from gwb_templates.inflation_templates import double_peak_sharp  # noqa: F401
 from gwb_templates.inflation_templates import excited_states  # noqa: F401
