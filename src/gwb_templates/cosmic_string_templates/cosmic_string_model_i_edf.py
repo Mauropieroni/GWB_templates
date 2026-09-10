@@ -113,7 +113,7 @@ def _get_Delta_gr_extra(
 def _get_A_n_extra(
     f_eV: np.ndarray, Gmu: float, a_star_dof: np.ndarray, epoch: int
 ) -> np.ndarray:
-    """Integration bound Script-A_n with EDF scale factors (Eq. A.19)."""
+    """Integration bound Script-A_n with EDF scale factors (after Eq. A.19)."""
     D_r = _get_D(_nu_r, ct.Omega_R, Gmu)
     a_star_n = a_star_dof[epoch] / _a0
     return (D_r / a_star_n) / f_eV
