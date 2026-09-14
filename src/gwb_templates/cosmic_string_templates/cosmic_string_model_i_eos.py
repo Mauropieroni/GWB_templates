@@ -47,7 +47,7 @@ _G_ENTROPY_LOW_T = 3.91
 
 
 def _get_eos_slope(eos: ArrayLike) -> jax.Array:
-    """High-frequency spectral tilt induced by a non-standard EOS w (Eq. B.1)."""
+    """High-frequency spectral tilt induced by a non-standard EOS w (Eq. 2.9)."""
     return jnp.where(
         eos <= 1.0 / 9.0,
         1.0,

@@ -74,39 +74,39 @@ def _hyperharmonic(r: jax.Array, N: jax.Array) -> jax.Array:
 
 
 def _get_epsilon_r(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Radiation-era loop size ratio eps_r (Eq. A.4)."""
+    """Radiation-era loop size ratio eps_r (Eq. A.3)."""
     return jnp.asarray(alpha / _Gamma / Gmu)
 
 
 def _get_epsilon_m(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Matter-era loop size ratio eps_m (Eq. A.4)."""
+    """Matter-era loop size ratio eps_m (Eq. A.3)."""
     return _get_epsilon_r(Gmu, alpha) * _xi_m / _xi_r
 
 
 def _get_gamma_m(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Matter-era loop-size enhancement factor gamma_m (Eq. A.4)."""
+    """Matter-era loop-size enhancement factor gamma_m (Eq. A.3)."""
     return 1.0 + 1.0 / _get_epsilon_m(Gmu, alpha)
 
 
 def _get_beta_m(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Matter-era shape factor beta_m (Eq. A.4)."""
+    """Matter-era shape factor beta_m (Eq. A.3)."""
     eps_m = _get_epsilon_m(Gmu, alpha)
     return (1.0 + 1.0 / _get_gamma_m(Gmu, alpha)) / eps_m
 
 
 def _get_D(nu_i: float, Omega_i: float, Gmu: jax.Array) -> jax.Array:
-    """Characteristic frequency scale D_i (Eq. A.4)."""
+    """Characteristic frequency scale D_i (Eq. A.3)."""
     return jnp.asarray(2.0 * ct.H0_eV * jnp.sqrt(Omega_i) / nu_i / _Gamma / Gmu)
 
 
 def _get_f_min_r(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Min. frequency from radiation-era loops (after Eq. A.5)."""
+    """Min. frequency from radiation-era loops (after Eq. A.3)."""
     D_r = _get_D(_nu_r, ct.Omega_R, Gmu)
     return D_r * (ct.Omega_M / ct.Omega_R) / _get_epsilon_r(Gmu, alpha)
 
 
 def _get_f_min_m(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Min. frequency from matter-era loops (after Eq. A.5)."""
+    """Min. frequency from matter-era loops (after Eq. A.3)."""
     D_m = _get_D(_nu_m, ct.Omega_M, Gmu)
     return D_m / _get_epsilon_m(Gmu, alpha)
 
@@ -139,30 +139,30 @@ def _get_A_n(
 
 
 def _get_tilde_A_rm(f_eV: jax.Array, Gmu: jax.Array) -> jax.Array:
-    """Rad-to-matter transition bound tilde-A_rm (Eq. A.4)."""
+    """Rad-to-matter transition bound tilde-A_rm (Eq. A.3)."""
     D_m = _get_D(_nu_m, ct.Omega_M, Gmu)
     return (D_m * jnp.sqrt(ct.Omega_M / ct.Omega_R)) / f_eV
 
 
 def _get_tilde_A_m(f_eV: jax.Array, Gmu: jax.Array) -> jax.Array:
-    """Matter-era integration bound tilde-A_m (Eq. A.4)."""
+    """Matter-era integration bound tilde-A_m (Eq. A.3)."""
     return _get_D(_nu_m, ct.Omega_M, Gmu) / f_eV
 
 
 def _get_C_i(xi_i: float, v_i: float) -> jax.Array:
-    """Spectral amplitude coefficient C_i (Eq. A.4)."""
+    """Spectral amplitude coefficient C_i (Eq. A.3)."""
     return _c_tilde * _mathcal_F * v_i / xi_i**3 / jnp.sqrt(2.0)
 
 
 def _get_C_r_no_dof(Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Radiation-era amplitude prefactor C_r without DOF changes (Eq. A.4)."""
+    """Radiation-era amplitude prefactor C_r without DOF changes (Eq. A.3)."""
     eps_r = _get_epsilon_r(Gmu, alpha)
     C_r = _get_C_i(_xi_r, _v_r)
     return 128.0 / 9.0 * jnp.pi * C_r * ct.Omega_R * (1.0 + eps_r) ** 1.5 / eps_r * Gmu
 
 
 def _get_C_rm(f_eV: jax.Array, Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Rad-to-matter transition amplitude C_rm (Eq. A.4)."""
+    """Rad-to-matter transition amplitude C_rm (Eq. A.3)."""
     eps_r = _get_epsilon_r(Gmu, alpha)
     return (
         32.0
@@ -178,7 +178,7 @@ def _get_C_rm(f_eV: jax.Array, Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
 
 
 def _get_C_m(f_eV: jax.Array, Gmu: jax.Array, alpha: jax.Array) -> jax.Array:
-    """Matter-era amplitude coefficient C_m (Eq. A.4)."""
+    """Matter-era amplitude coefficient C_m (Eq. A.3)."""
     eps_m = _get_epsilon_m(Gmu, alpha)
     return (
         162.0
