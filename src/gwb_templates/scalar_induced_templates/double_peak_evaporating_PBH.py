@@ -34,7 +34,6 @@ from typing import Any, ClassVar, TypeAlias
 import jax
 import jax.numpy as jnp
 import jax.typing as jtp
-import math
 
 from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
 from gwb_templates.generic_templates.double_broken_power_law import (
@@ -45,8 +44,8 @@ from gwb_templates.template import AnalyticTemplate
 ArrayLike: TypeAlias = jtp.ArrayLike
 
 _G_STAR_REF: float = 106.75
-_LOG10_OMEGA_R0_H2: float = math.log10(4.18e-5)
-_LOG10_F_UV_KHZ_PREFACTOR: float = math.log10(1.7e3)  # 1.7 kHz -> Hz
+_LOG10_OMEGA_R0_H2: jax.Array = jnp.log10(4.18e-5)
+_LOG10_F_UV_KHZ_PREFACTOR: jax.Array = jnp.log10(1.7e3)  # 1.7 kHz -> Hz
 
 # c_s^2 = 1/3 during radiation domination, fixed since the UV windows are
 # evaluated after PBH evaporation, independent of the pre-evaporation w.
@@ -68,7 +67,7 @@ def _b_of_w(w: jax.Array) -> jax.Array:
 
 def _log10_C_of_w(w: jax.Array, b: jax.Array) -> jax.Array:
     # C(w) = (9/20) * (0.135*(3+b))^(-1/(3w))
-    return math.log10(9.0 / 20.0) - (1.0 / (3.0 * w)) * jnp.log10(0.135 * (3.0 + b))
+    return jnp.log10(9.0 / 20.0) - (1.0 / (3.0 * w)) * jnp.log10(0.135 * (3.0 + b))
 
 
 def _n_of_w(w: jax.Array, b: jax.Array) -> jax.Array:
@@ -120,7 +119,7 @@ def _log10_beta_max(
     log10_c = _log10_C_of_w(w, b)
 
     return (
-        (3.0 * w / (4.0 * (1.0 + w))) * math.log10(2.3e-32)
+        (3.0 * w / (4.0 * (1.0 + w))) * jnp.log10(2.3e-32)
         - (3.0 * w / (1.0 + w)) * log10_c
         - (2.0 * w / (1.0 + w)) * jnp.log10(gamma / 0.2)
         - (17.0 * w / (6.0 * (1.0 + w))) * (log_m_pbh - 4.0)
@@ -135,13 +134,13 @@ def _log10_beta_min(
     """
     Physical lower bound on log10(beta).
     """
-    log10_m_pl = math.log10(4.34e-6)
+    log10_m_pl = jnp.log10(4.34e-6)
 
     return (2.0 * w / (1.0 + w)) * (
-        math.log10(3.8 * math.pi / 480.0)
-        + math.log10(108.0)
-        - math.log10(1.0 + w)
-        - math.log10(2.0 * math.pi)
+        jnp.log10(3.8 * jnp.pi / 480.0)
+        + jnp.log10(108.0)
+        - jnp.log10(1.0 + w)
+        - jnp.log10(2.0 * jnp.pi)
         - jnp.log10(gamma)
         + 2.0 * (log10_m_pl - log_m_pbh)
     )
@@ -172,7 +171,7 @@ def _log10_omega_iso_peak(
     log_m_ratio = log_m_pbh - 4.0
     log_gamma_ratio = jnp.log10(gamma / 0.2)
     return (
-        math.log10(8.66e30)
+        jnp.log10(8.66e30)
         + 4.0 * _log10_C_of_w(w, b)
         + (4.0 * (1.0 + w) / (3.0 * w)) * log_beta
         - (1.0 / 3.0) * jnp.log10(g_star / _G_STAR_REF)
@@ -193,7 +192,7 @@ def _log10_omega_iso_ir(
     log_m_ratio = log_m_pbh - 4.0
     log_gamma_ratio = jnp.log10(gamma / 0.2)
     return (
-        math.log10(3.49e24)
+        jnp.log10(3.49e24)
         + 4.0 * _log10_C_of_w(w, b)
         + (4.0 * (1.0 + w) / (3.0 * w)) * log_beta
         - (1.0 / 3.0) * jnp.log10(g_star / _G_STAR_REF)
@@ -217,9 +216,9 @@ def _log10_omega_ad_uv(
     a_phi = _a_phi_of_w(w, b)
     log_m_ratio = log_m_pbh - 4.0
     return (
-        math.log10(3.14e28)
-        + (2.0 * n_w + n_s) * math.log10(3.0)
-        - (3.0 * n_w + n_s) * math.log10(4.0)
+        jnp.log10(3.14e28)
+        + (2.0 * n_w + n_s) * jnp.log10(3.0)
+        - (3.0 * n_w + n_s) * jnp.log10(4.0)
         + 2.0 * log_a_s
         + 4.0 * jnp.log10(jnp.abs(a_phi))  # even power -> sign irrelevant
         - (4.0 * n_w / 3.0) * jnp.log10(gamma)
@@ -248,8 +247,8 @@ def _log10_omega_ad_mid(
     denom = 6.0 - n_eff
     denom_safe = jnp.where(denom == 0.0, 1e-8, denom)
     return (
-        math.log10(6.88e20)
-        + n_s * math.log10(2.0)
+        jnp.log10(6.88e20)
+        + n_s * jnp.log10(2.0)
         + 2.0 * log_a_s
         + 4.0 * jnp.log10(jnp.abs(a_phi))
         - jnp.log10(jnp.abs(denom_safe))
@@ -279,9 +278,9 @@ def _log10_omega_ad_ir(
     )
     exponent = 5.0 / 3.0 + 2.0 * n_s
     return (
-        math.log10(1.06e20)
+        jnp.log10(1.06e20)
         + 4.0 * jnp.log10(jnp.abs((5.0 + 3.0 * w) / (1.0 + w)))
-        + n_s * math.log10(2.0)
+        + n_s * jnp.log10(2.0)
         + 2.0 * log_a_s
         - jnp.log10(jnp.abs(5.0 + 6.0 * n_s))
         + exponent * inner_log10
@@ -321,22 +320,18 @@ def _log10_f_br2(
 
 
 def _hyp2f1_series(
-    a: ArrayLike, b: ArrayLike, c: ArrayLike, z: jax.Array, n_terms: int = 50
+    a: ArrayLike, b: ArrayLike, c: ArrayLike, z: jax.Array
 ) -> jax.Array:
     r"""
-    Truncated power-series evaluation of the Gauss hypergeometric function
-    :math:`{}_2F_1(a, b; c; z) = \sum_k \frac{(a)_k (b)_k}{(c)_k\,k!} z^k`.
+    Evaluate the Gauss hypergeometric function with a Taylor series.
 
-    JAX has no native hyp2f1. Used only for the UV cutoff windows below,
-    where :math:`z = c_s^2 s_0^2 \le 1/3` and :math:`|{-n_{\rm eff}}|` is
-    O(1-3) in the parameter regime of interest, so the series converges
-    quickly. NOT a general-purpose hyp2f1 implementation.
+    JAX provides a native ``hyp2f1``, but this series implementation is
+    faster for the UV cutoff windows while achieving comparable accuracy in
+    the parameter regime used here. It is not a general-purpose
+    ``hyp2f1`` implementation.
     """
+    n_terms = 20
     dtype = jnp.result_type(a, b, c, z, jnp.float32)
-    a = jnp.asarray(a, dtype=dtype)
-    b = jnp.asarray(b, dtype=dtype)
-    c = jnp.asarray(c, dtype=dtype)
-    z = jnp.asarray(z, dtype=dtype)
 
     k = jnp.arange(n_terms - 1, dtype=dtype)
     ratio = (a + k) * (b + k) / ((c + k) * (k + 1.0))
@@ -345,12 +340,10 @@ def _hyp2f1_series(
     return jnp.sum(coeffs * powers, axis=-1)
 
 
-def _theta_uv_iso(
-    s0: jax.Array, c_s2: float = _C_S2_RD, n_terms: int = 50
-) -> jax.Array:
+def _theta_uv_iso(s0: jax.Array, c_s2: float = _C_S2_RD) -> jax.Array:
     z = c_s2 * s0**2
     c_s4 = c_s2**2
-    hyp = _hyp2f1_series(5.0 / 6.0, 1.0, 1.5, z, n_terms=n_terms)
+    hyp = _hyp2f1_series(5.0 / 6.0, 1.0, 1.5, z)
     numerator = (
         3.0 * s0 * (5.0 * c_s4 - 2.0 * c_s2 * (2.0 * s0**2 + 5.0) + 9.0)
         - (5.0 * c_s2 * (c_s2 + 6.0) - 27.0) * s0 * (c_s2 * s0**2 - 1.0) * hyp
@@ -360,65 +353,116 @@ def _theta_uv_iso(
 
 
 def _theta_uv_ad(
-    s0: jax.Array, n_eff: jax.Array, c_s2: float = _C_S2_RD, n_terms: int = 50
+    s0: jax.Array, n_eff: jax.Array, c_s2: float = _C_S2_RD
 ) -> jax.Array:
     z = c_s2 * s0**2
-    hyp1 = _hyp2f1_series(2.5, -n_eff, 3.5, z, n_terms=n_terms)
-    hyp2 = _hyp2f1_series(1.5, -n_eff, 2.5, z, n_terms=n_terms)
-    hyp3 = _hyp2f1_series(0.5, -n_eff, 1.5, z, n_terms=n_terms)
+    hyp1 = _hyp2f1_series(2.5, -n_eff, 3.5, z)
+    hyp2 = _hyp2f1_series(1.5, -n_eff, 2.5, z)
+    hyp3 = _hyp2f1_series(0.5, -n_eff, 1.5, z)
     return (2.0 / 5.0) * s0**5 * hyp1 - (4.0 / 3.0) * s0**3 * hyp2 + 2.0 * s0 * hyp3
 
 
 def _s0_of_f(
     frequency: jax.Array, log_f_uv: jax.Array, c_s2: float = _C_S2_RD
 ) -> jax.Array:
-    c_s_inv = 1.0 / math.sqrt(c_s2)
+    c_s_inv = 1.0 / jnp.sqrt(c_s2)
     f_uv = 10.0**log_f_uv
     r = f_uv / frequency
     return jnp.clip(2.0 * r - c_s_inv, 0.0, 1.0)
 
 
 def _window_iso(
-    frequency: jax.Array, log_f_uv: jax.Array, n_terms: int = 50
+    frequency: jax.Array, log_f_uv: jax.Array
 ) -> jax.Array:
     s0 = _s0_of_f(frequency, log_f_uv)
-    theta = _theta_uv_iso(s0, n_terms=n_terms)
+    theta = _theta_uv_iso(s0)
     return theta
 
 
 def _window_ad(
-    frequency: jax.Array, log_f_uv: jax.Array, n_eff: jax.Array, n_terms: int = 50
+    frequency: jax.Array, log_f_uv: jax.Array, n_eff: jax.Array
 ) -> jax.Array:
     s0 = _s0_of_f(frequency, log_f_uv)
-    theta = _theta_uv_ad(s0, n_eff, n_terms=n_terms)
+    theta = _theta_uv_ad(s0, n_eff)
     return theta
 
 
 # ---------------------------------------------------------------------------
-# Validity check (b <= 0.65, i.e. w >= ~7e-2)
+# Validity checks (b <= 0.65, i.e. w >= ~7e-2, and beta bounds)
 # ---------------------------------------------------------------------------
 
 
-def _check_w_validity(w: jax.Array, label: str) -> None:
+def _check_parameter_validity(
+    log_m_pbh: ArrayLike,
+    log_beta: ArrayLike,
+    w: jax.Array,
+    gamma: ArrayLike,
+    label: str,
+) -> None:
     """
-    JIT/grad-compatible runtime warning (not an exception, does not alter
-    the output) if any element of ``w`` violates b <= 0.65 (w >= ~7e-2).
-    """
-    b = _b_of_w(jnp.asarray(w))
-    invalid = jnp.any(b > _B_MAX)
+    Raise an error if ``w`` or ``log_beta`` is outside the physical fit range.
 
-    def _warn() -> None:
-        jax.debug.print(
-            "[{label}] w = {w} (b = {b}) outside regime of validity of "
-            "fit (requires b <= 0.65, i.e. w >= ~7e-2). Results are not "
-            "reliable.",
-            label=label,
-            w=w,
-            b=b,
+    The callback keeps this check compatible with JIT and autodiff, where
+    parameters may be tracers rather than concrete Python values.
+    """
+    b = _b_of_w(w)
+    log_beta_min = _log10_beta_min(log_m_pbh, w, gamma)
+    log_beta_max = _log10_beta_max(log_m_pbh, w, gamma)
+    invalid_w = jnp.any(b > _B_MAX)
+    invalid_beta = jnp.any((log_beta < log_beta_min) | (log_beta > log_beta_max))
+    invalid = invalid_w | invalid_beta
+
+    def _raise(
+        invalid_w_value: jax.Array,
+        invalid_beta_value: jax.Array,
+        w_value: jax.Array,
+        b_value: jax.Array,
+        log_beta_value: jax.Array,
+        log_beta_min_value: jax.Array,
+        log_beta_max_value: jax.Array,
+    ) -> None:
+        if bool(invalid_w_value):
+            raise ValueError(
+                f"[{label}] w = {w_value} (b = {b_value}) is outside the "
+                "validity range of the fit (requires b <= 0.65, "
+                "i.e. w >= ~7e-2)."
+            )
+        if bool(invalid_beta_value):
+            raise ValueError(
+                f"[{label}] log_beta = {log_beta_value} is outside the "
+                f"physical range [{log_beta_min_value}, {log_beta_max_value}]."
+            )
+
+    def _error() -> None:
+        jax.debug.callback(
+            _raise,
+            invalid_w,
+            invalid_beta,
+            w,
+            b,
+            log_beta,
+            log_beta_min,
+            log_beta_max,
         )
         return None
 
-    jax.lax.cond(invalid, _warn, lambda: None)
+    try:
+        if bool(invalid):
+            _raise(
+                invalid_w,
+                invalid_beta,
+                w,
+                b,
+                log_beta,
+                log_beta_min,
+                log_beta_max,
+            )
+        return None
+    except TypeError:
+        # Tracers cannot be converted to bool; defer the check to runtime.
+        pass
+
+    jax.lax.cond(invalid, _error, lambda: None)
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +534,6 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         xi_1: float = 1.0,
         bpl_log_transition: float = -1.0,
         dbpl_log_transitions: tuple[float, float] = (-3.0, -10.0),
-        hyp2f1_n_terms: int = 50,
     ) -> None:
         # g_star: fixed reference value for g_*(T_rh); not computed
         # self-consistently from T_rh(M_PBH) relation .
@@ -500,15 +543,12 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         # underlying templates, set to a small default (delta = 10^-1) to
         # approximate the genuine kinks of the physical piecewise spectrum
         # without risking numerical issues at delta -> 0.
-        # hyp2f1_n_terms: number of terms in the truncated hyp2f1 series
-        # used by the UV cutoff windows; see module docstring.
         self._bpl = BrokenPowerLaw()
         self._dbpl = DoubleBrokenPowerLaw()
         self._g_star = g_star
         self._xi_1 = xi_1
         self._bpl_log_transition = bpl_log_transition
         self._dbpl_log_transitions = dbpl_log_transitions
-        self._hyp2f1_n_terms = hyp2f1_n_terms
 
         default_labels = {
             "log_m_pbh": r"$\log_{10}(M_{\rm PBH}/\mathrm{g})$",
@@ -570,50 +610,6 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
                 prior_by_param if prior_by_param is not None else default_priors
             ),
         )
-
-    def log_prior(self, theta: jax.Array) -> jax.Array:
-        """
-        Log-prior for the physical parameter vector.
-
-        Uniform in log_beta conditional on (log_m_pbh, w, gamma).
-        """
-
-        log_m_pbh, log_beta, w, gamma, log_a_s, n_s = theta
-
-        valid = (
-            (log_m_pbh >= 0.0)
-            & (log_m_pbh <= 8.0)
-            & (w >= _W_MIN)
-            & (w <= 1.0)
-            & (gamma >= 0.05)
-            & (gamma <= 0.5)
-            & (log_a_s >= -12.0)
-            & (log_a_s <= -2.0)
-            & (n_s >= 0.8)
-            & (n_s <= 1.2)
-        )
-
-        log_beta_min = _log10_beta_min(
-            log_m_pbh,
-            w,
-            gamma,
-        )
-
-        log_beta_max = _log10_beta_max(
-            log_m_pbh,
-            w,
-            gamma,
-        )
-
-        beta_width = log_beta_max - log_beta_min
-
-        valid &= log_beta >= log_beta_min
-        valid &= log_beta <= log_beta_max
-        valid &= beta_width > 0.0
-
-        logp_beta = -jnp.log(beta_width)
-
-        return jnp.where(valid, logp_beta, -jnp.inf)
 
     def _isocurvature_params(
         self,
@@ -690,10 +686,11 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         interface; provided for diagnostic plotting, cf. the individual
         contributions shown in the reference figure).
         """
-        w_arr = jnp.asarray(w)
-        _check_w_validity(w_arr, "omega_gw_h2_isocurvature")
+        _check_parameter_validity(
+            log_m_pbh, log_beta, w, gamma, "omega_gw_h2_isocurvature"
+        )
         log_amp_iso, log_f_br, log_f_uv = self._isocurvature_params(
-            log_m_pbh, log_beta, w_arr, gamma
+            log_m_pbh, log_beta, w, gamma
         )
         iso = self._bpl.omega_gw_h2(
             frequency,
@@ -703,10 +700,8 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             11.0 / 3.0,
             self._bpl_log_transition,
         )
-        window = _window_iso(
-            jnp.asarray(frequency), log_f_uv, n_terms=self._hyp2f1_n_terms
-        )
-        return jnp.asarray(iso * window)
+        window = _window_iso(frequency, log_f_uv)
+        return iso * window
 
     def omega_gw_h2_adiabatic(
         self,
@@ -719,11 +714,12 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         n_s: ArrayLike,
     ) -> jax.Array:
         """Adiabatic-induced peak only (see :meth:`omega_gw_h2_isocurvature`)."""
-        w_arr = jnp.asarray(w)
-        _check_w_validity(w_arr, "omega_gw_h2_adiabatic")
+        _check_parameter_validity(
+            log_m_pbh, log_beta, w, gamma, "omega_gw_h2_adiabatic"
+        )
         log_f_uv = _log10_f_uv(log_m_pbh, self._g_star)
         log_amp_ad, log_f_br1, log_f_br2, n_eff = self._adiabatic_params(
-            log_m_pbh, log_beta, w_arr, gamma, log_a_s, n_s, log_f_uv
+            log_m_pbh, log_beta, w, gamma, log_a_s, n_s, log_f_uv
         )
         a1, a2 = self._dbpl_log_transitions
         ad = self._dbpl.omega_gw_h2(
@@ -737,10 +733,8 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             a1,
             a2,
         )
-        window = _window_ad(
-            jnp.asarray(frequency), log_f_uv, n_eff, n_terms=self._hyp2f1_n_terms
-        )
-        return jnp.asarray(ad * window)
+        window = _window_ad(frequency, log_f_uv, n_eff)
+        return ad * window
 
     def omega_gw_h2(
         self,
@@ -756,12 +750,10 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         Evaluate the total (isocurvature + adiabatic) spectrum at
         ``frequency``, including the smooth UV cutoff windows.
         """
-        w_arr = jnp.asarray(w)
-        _check_w_validity(w_arr, "omega_gw_h2")
-        frequency_arr = jnp.asarray(frequency)
+        _check_parameter_validity(log_m_pbh, log_beta, w, gamma, "omega_gw_h2")
 
         log_amp_iso, log_f_br, log_f_uv = self._isocurvature_params(
-            log_m_pbh, log_beta, w_arr, gamma
+            log_m_pbh, log_beta, w, gamma
         )
         iso = self._bpl.omega_gw_h2(
             frequency,
@@ -771,10 +763,10 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             11.0 / 3.0,
             self._bpl_log_transition,
         )
-        window_iso = _window_iso(frequency_arr, log_f_uv, n_terms=self._hyp2f1_n_terms)
+        window_iso = _window_iso(frequency, log_f_uv)
 
         log_amp_ad, log_f_br1, log_f_br2, n_eff = self._adiabatic_params(
-            log_m_pbh, log_beta, w_arr, gamma, log_a_s, n_s, log_f_uv
+            log_m_pbh, log_beta, w, gamma, log_a_s, n_s, log_f_uv
         )
         a1, a2 = self._dbpl_log_transitions
         ad = self._dbpl.omega_gw_h2(
@@ -788,11 +780,9 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             a1,
             a2,
         )
-        window_ad = _window_ad(
-            frequency_arr, log_f_uv, n_eff, n_terms=self._hyp2f1_n_terms
-        )
+        window_ad = _window_ad(frequency, log_f_uv, n_eff)
 
-        return jnp.asarray(iso * window_iso + ad * window_ad)
+        return iso * window_iso + ad * window_ad
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -800,32 +790,100 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         r"""
-        Jacobian via JAX forward-mode autodiff of :meth:`omega_gw_h2`.
+        Jacobian assembled from the analytic BPL/DBPL derivatives.
 
-        We do not hand-derive a closed-form Jacobian here: with 6 scalar
-        parameters, many chained power-law/piecewise terms, and the UV
-        cutoff windows (which themselves involve hyp2f1 series), a manual
-        derivation would be long and error-prone, and mathematically
-        offers no advantage over automatic differentiation of the
-        (already analytic) forward formula. ``jacfwd`` is used rather than
-        the reverse-mode default because the number of parameters (6) is
-        much smaller than the typical size of ``frequency``.
+        The derivatives of the template arguments and UV windows are taken
+        with respect to the six physical parameters, then combined with the
+        analytic child-template Jacobians using the chain and product rules.
+        The parent class autodiff backend remains available as an independent
+        reference implementation.
         """
         log_m_pbh, log_beta, w, gamma, log_a_s, n_s = theta
+        parameters = (log_m_pbh, log_beta, w, gamma, log_a_s, n_s)
 
-        def f(
-            log_m_pbh: jax.Array,
-            log_beta: jax.Array,
-            w: jax.Array,
-            gamma: jax.Array,
-            log_a_s: jax.Array,
-            n_s: jax.Array,
-        ) -> jax.Array:
-            return self.omega_gw_h2(
-                frequency, log_m_pbh, log_beta, w, gamma, log_a_s, n_s
+        log_amp_iso, log_f_br, log_f_uv = self._isocurvature_params(
+            log_m_pbh, log_beta, w, gamma
+        )
+        bpl_parameters = jnp.array(
+            [log_amp_iso, log_f_br, 1.0, 11.0 / 3.0, self._bpl_log_transition]
+        )
+        bpl = self._bpl.omega_gw_h2(frequency, *bpl_parameters)
+        bpl_grad = self._bpl._grad_theta_omega_gw_h2_analytical(
+            frequency, bpl_parameters
+        )
+
+        def bpl_parameter_map(*values: jax.Array) -> jax.Array:
+            log_amp, log_break, _ = self._isocurvature_params(
+                values[0], values[1], values[2], values[3]
+            )
+            return jnp.array(
+                [log_amp, log_break, 1.0, 11.0 / 3.0, self._bpl_log_transition]
             )
 
-        jac = jax.jacfwd(f, argnums=(0, 1, 2, 3, 4, 5))(
-            log_m_pbh, log_beta, w, gamma, log_a_s, n_s
+        bpl_parameter_jac = jax.jacfwd(
+            bpl_parameter_map, argnums=tuple(range(6))
+        )(*parameters)
+        bpl_parameter_jac = jnp.stack(bpl_parameter_jac, axis=-1)
+        bpl_grad_theta = jnp.einsum("fi,ij->fj", bpl_grad, bpl_parameter_jac)
+
+        def iso_window_map(*values: jax.Array) -> jax.Array:
+            log_uv = _log10_f_uv(values[0], self._g_star)
+            return _window_iso(frequency, log_uv)
+
+        window_iso = iso_window_map(*parameters)
+        window_iso_theta = jnp.stack(
+            jax.jacfwd(iso_window_map, argnums=tuple(range(6)))(*parameters), axis=-1
         )
-        return jnp.stack(jac, axis=-1)
+
+        log_amp_ad, log_f_br1, log_f_br2, n_eff = self._adiabatic_params(
+            log_m_pbh, log_beta, w, gamma, log_a_s, n_s, log_f_uv
+        )
+        a1, a2 = self._dbpl_log_transitions
+        dbpl_parameters = jnp.array(
+            [log_amp_ad, log_f_br2, log_f_br1, n_eff, 5.0, 1.0, a1, a2]
+        )
+        dbpl = self._dbpl.omega_gw_h2(frequency, *dbpl_parameters)
+        dbpl_grad = self._dbpl._grad_theta_omega_gw_h2_analytical(
+            frequency, dbpl_parameters
+        )
+
+        def dbpl_parameter_map(*values: jax.Array) -> jax.Array:
+            uv_log = _log10_f_uv(values[0], self._g_star)
+            log_amp, log_break_1, log_break_2, effective_tilt = (
+                self._adiabatic_params(
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4],
+                    values[5],
+                    uv_log,
+                )
+            )
+            return jnp.array(
+                [log_amp, log_break_2, log_break_1, effective_tilt, 5.0, 1.0, a1, a2]
+            )
+
+        dbpl_parameter_jac = jax.jacfwd(
+            dbpl_parameter_map, argnums=tuple(range(6))
+        )(*parameters)
+        dbpl_parameter_jac = jnp.stack(dbpl_parameter_jac, axis=-1)
+        dbpl_grad_theta = jnp.einsum("fi,ij->fj", dbpl_grad, dbpl_parameter_jac)
+
+        def ad_window_map(*values: jax.Array) -> jax.Array:
+            uv_log = _log10_f_uv(values[0], self._g_star)
+            b_value = _b_of_w(values[2])
+            effective_tilt = _n_eff(values[2], b_value, values[5])
+            return _window_ad(frequency, uv_log, effective_tilt)
+
+        window_ad = ad_window_map(*parameters)
+        window_ad_theta = jnp.stack(
+            jax.jacfwd(ad_window_map, argnums=tuple(range(6)))(*parameters), axis=-1
+        )
+
+        return (
+            window_iso[..., None] * bpl_grad_theta
+            + bpl[..., None] * window_iso_theta
+            + window_ad[..., None] * dbpl_grad_theta
+            + dbpl[..., None] * window_ad_theta
+        )
