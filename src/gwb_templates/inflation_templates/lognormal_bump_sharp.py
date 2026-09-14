@@ -18,22 +18,19 @@ Reference: arXiv:2407.04356.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
 
-ArrayLike: TypeAlias = jtp.ArrayLike
-
 
 def _lognormal_bump_envelope(
-    frequency: ArrayLike,
-    log_amplitude: ArrayLike,
-    log_pivot: ArrayLike,
-    log_width: ArrayLike,
+    frequency: jax.Array,
+    log_amplitude: jax.Array,
+    log_pivot: jax.Array,
+    log_width: jax.Array,
 ) -> jax.Array:
     """Internal pure-JAX lognormal bump envelope."""
     amplitude = 10.0**log_amplitude
@@ -43,16 +40,16 @@ def _lognormal_bump_envelope(
 
 
 def _lognormal_bump_envelope_and_grad(
-    frequency: ArrayLike,
-    log_amplitude: ArrayLike,
-    log_pivot: ArrayLike,
-    log_width: ArrayLike,
+    frequency: jax.Array,
+    log_amplitude: jax.Array,
+    log_pivot: jax.Array,
+    log_width: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
     """Return (envelope, d envelope / d[log_A, log_pivot, log_width])."""
     pivot = 10.0**log_pivot
     width = 10.0**log_width
     envelope = _lognormal_bump_envelope(frequency, log_amplitude, log_pivot, log_width)
-    u = jnp.log10(jnp.asarray(frequency) / pivot)
+    u = jnp.log10(frequency / pivot)
     ln10 = jnp.log(10.0)
     d_logA = envelope * ln10
     d_logpiv = envelope * u / width**2
@@ -89,6 +86,21 @@ class LognormalBumpSharp(AnalyticTemplate):
         Phase offset (radians).
     """
 
+    DEFAULT_MODEL_NAME: ClassVar[str] = "lognormal_bump_sharp"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Lognormal Bump + Sharp Feature"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        **_ENVELOPE_LABELS,
+        "A_sharp": r"$A_{\rm s}$",
+        "omega_sharp_Hz": r"$\omega_{\rm s}\,[\mathrm{Hz}^{-1}]$",
+        "phase_sharp": r"$\phi_{\rm s}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        **_ENVELOPE_PRIORS,
+        "A_sharp": {"min": -1.0, "max": 1.0},
+        "omega_sharp_Hz": {"min": 0.0, "max": 1e5},
+        "phase_sharp": {"min": -3.14159, "max": 3.14159},
+    }
+
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
 @article{LISACosmologyWorkingGroup:2024hsc,
@@ -109,51 +121,15 @@ class LognormalBumpSharp(AnalyticTemplate):
 """,
     )
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            **_ENVELOPE_LABELS,
-            "A_sharp": r"$A_{\rm s}$",
-            "omega_sharp_Hz": r"$\omega_{\rm s}\,[\mathrm{Hz}^{-1}]$",
-            "phase_sharp": r"$\phi_{\rm s}$",
-        }
-        default_priors = {
-            **_ENVELOPE_PRIORS,
-            "A_sharp": {"min": -1.0, "max": 1.0},
-            "omega_sharp_Hz": {"min": 0.0, "max": 1e5},
-            "phase_sharp": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Lognormal Bump + Sharp Feature"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
-
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        log_width: ArrayLike,
-        A_sharp: ArrayLike,
-        omega_sharp_Hz: ArrayLike,
-        phase_sharp: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_pivot: jax.Array,
+        log_width: jax.Array,
+        A_sharp: jax.Array,
+        omega_sharp_Hz: jax.Array,
+        phase_sharp: jax.Array,
     ) -> jax.Array:
         envelope = _lognormal_bump_envelope(
             frequency, log_amplitude, log_pivot, log_width
@@ -163,17 +139,18 @@ class LognormalBumpSharp(AnalyticTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on lognormal-bump x sharp-feature."""
-        freq = jnp.asarray(frequency)
-        E, dE = _lognormal_bump_envelope_and_grad(freq, theta[0], theta[1], theta[2])
+        E, dE = _lognormal_bump_envelope_and_grad(
+            frequency, theta[0], theta[1], theta[2]
+        )
         A_sharp, omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
-        arg = omega_sharp_Hz * freq + phase_sharp
+        arg = omega_sharp_Hz * frequency + phase_sharp
         F = 1.0 + A_sharp * jnp.cos(arg)
         d_A = jnp.cos(arg)
-        d_omega = -A_sharp * jnp.sin(arg) * freq
+        d_omega = -A_sharp * jnp.sin(arg) * frequency
         d_phi = -A_sharp * jnp.sin(arg)
         dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
@@ -181,8 +158,7 @@ class LognormalBumpSharp(AnalyticTemplate):
 
 class LognormalBumpSharpLog(AnalyticTemplate):
     r"""
-    Lognormal bump envelope multiplied by a log-parametrized sharp-feature
-    modulation.
+    Lognormal bump envelope multiplied by a log-parametrized sharp-feature modulation.
 
     Free parameters
     ---------------
@@ -196,6 +172,21 @@ class LognormalBumpSharpLog(AnalyticTemplate):
         Phase offset (radians).
     """
 
+    DEFAULT_MODEL_NAME: ClassVar[str] = "lognormal_bump_sharp_log"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Lognormal Bump + Sharp Feature (log params)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        **_ENVELOPE_LABELS,
+        "log_A_sharp": r"$\log_{10}A_{\rm s}$",
+        "log_omega_sharp_Hz": r"$\log_{10}(\omega_{\rm s}/\mathrm{Hz}^{-1})$",
+        "phase_sharp": r"$\phi_{\rm s}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        **_ENVELOPE_PRIORS,
+        "log_A_sharp": {"min": -3.0, "max": 0.0},
+        "log_omega_sharp_Hz": {"min": 0.0, "max": 5.0},
+        "phase_sharp": {"min": -3.14159, "max": 3.14159},
+    }
+
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
 @article{LISACosmologyWorkingGroup:2024hsc,
@@ -216,51 +207,15 @@ class LognormalBumpSharpLog(AnalyticTemplate):
 """,
     )
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            **_ENVELOPE_LABELS,
-            "log_A_sharp": r"$\log_{10}A_{\rm s}$",
-            "log_omega_sharp_Hz": r"$\log_{10}(\omega_{\rm s}/\mathrm{Hz}^{-1})$",
-            "phase_sharp": r"$\phi_{\rm s}$",
-        }
-        default_priors = {
-            **_ENVELOPE_PRIORS,
-            "log_A_sharp": {"min": -3.0, "max": 0.0},
-            "log_omega_sharp_Hz": {"min": 0.0, "max": 5.0},
-            "phase_sharp": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Lognormal Bump + Sharp Feature (log params)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
-
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        log_width: ArrayLike,
-        log_A_sharp: ArrayLike,
-        log_omega_sharp_Hz: ArrayLike,
-        phase_sharp: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_pivot: jax.Array,
+        log_width: jax.Array,
+        log_A_sharp: jax.Array,
+        log_omega_sharp_Hz: jax.Array,
+        phase_sharp: jax.Array,
     ) -> jax.Array:
         envelope = _lognormal_bump_envelope(
             frequency, log_amplitude, log_pivot, log_width
@@ -272,20 +227,21 @@ class LognormalBumpSharpLog(AnalyticTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on lognormal-bump x log sharp-feature."""
-        freq = jnp.asarray(frequency)
-        E, dE = _lognormal_bump_envelope_and_grad(freq, theta[0], theta[1], theta[2])
+        E, dE = _lognormal_bump_envelope_and_grad(
+            frequency, theta[0], theta[1], theta[2]
+        )
         log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
         A_sharp = 10.0**log_A_sharp
         omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        arg = omega_sharp_Hz * freq + phase_sharp
+        arg = omega_sharp_Hz * frequency + phase_sharp
         F = 1.0 + A_sharp * jnp.cos(arg)
         ln10 = jnp.log(10.0)
         d_logA = ln10 * A_sharp * jnp.cos(arg)
-        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * freq
+        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * frequency
         d_phi = -A_sharp * jnp.sin(arg)
         dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

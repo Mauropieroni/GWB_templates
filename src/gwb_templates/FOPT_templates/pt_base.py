@@ -75,7 +75,7 @@ _G_ENTROPY = [
 ]
 
 
-def g_star_energy(T: float | jax.Array) -> jax.Array:
+def g_star_energy(T: jax.Array) -> jax.Array:
     """
     Effective number of energetic degrees of freedom as a piecewise-constant
     function of temperature T (in GeV).
@@ -90,6 +90,7 @@ def g_star_energy(T: float | jax.Array) -> jax.Array:
 
     Args:
         T: Temperature in GeV.
+
     Returns:
         Effective number of energetic relativistic degrees of freedom at T.
     """
@@ -98,7 +99,7 @@ def g_star_energy(T: float | jax.Array) -> jax.Array:
     )
 
 
-def g_star_entropy(T: float | jax.Array) -> jax.Array:
+def g_star_entropy(T: jax.Array) -> jax.Array:
     """
     Effective number of entropic degrees of freedom as a piecewise-constant
     function of temperature T (in GeV).
@@ -109,6 +110,7 @@ def g_star_entropy(T: float | jax.Array) -> jax.Array:
 
     Args:
         T: Temperature in GeV.
+
     Returns:
         Effective number of entropic relativistic degrees of freedom at T.
     """
@@ -117,7 +119,7 @@ def g_star_entropy(T: float | jax.Array) -> jax.Array:
     )
 
 
-def a_hubble(T: float | jax.Array) -> float | jax.Array:
+def a_hubble(T: jax.Array) -> jax.Array:
     """
     Hubble rate at the transition temperature, redshifted to today (in Hz).
 
@@ -134,7 +136,7 @@ def a_hubble(T: float | jax.Array) -> float | jax.Array:
     return 1.65e-5 * jnp.sqrt(g_e / 100.0) * (100.0 / g_s) ** (1.0 / 3.0) * T / 100.0
 
 
-def redshift_omega(T: float | jax.Array) -> jax.Array:
+def redshift_omega(T: jax.Array) -> jax.Array:
     """
     Redshift factor for the gravitational wave energy density.
 
@@ -151,7 +153,7 @@ def redshift_omega(T: float | jax.Array) -> jax.Array:
     return 1.64e-5 * g_e / 100.0 * (100.0 / g_s) ** (4.0 / 3.0)
 
 
-def h_star_tau(K: float | jax.Array, R_H_star: float | jax.Array) -> jax.Array:
+def h_star_tau(K: jax.Array, R_H_star: jax.Array) -> jax.Array:
     """
     Hubble rate times the duration of the sound wave source.
 
@@ -178,11 +180,11 @@ def double_broken_power_law(
     log_amplitude: jax.Array,
     log_f_1: jax.Array,
     log_f_2: jax.Array,
-    n_1: float | jax.Array,
-    n_2: float | jax.Array,
-    n_3: float | jax.Array,
-    a_1: float | jax.Array,
-    a_2: float | jax.Array,
+    n_1: jax.Array,
+    n_2: jax.Array,
+    n_3: jax.Array,
+    a_1: jax.Array,
+    a_2: jax.Array,
 ) -> jax.Array:
     r"""
     Double broken power-law spectrum, normalised so that
@@ -208,6 +210,9 @@ def double_broken_power_law(
         log_f_1, log_f_2: log10 of the two break frequencies (Hz).
         n_1, n_2, n_3: Spectral indices in the three regimes.
         a_1, a_2: Transition smoothness parameters.
+
+    Returns:
+        Spectrum evaluated at ``freq``.
     """
     amplitude = 10.0**log_amplitude
     ratio = 10.0 ** (log_f_1 - log_f_2)  # f_1 / f_2
@@ -233,9 +238,9 @@ def broken_power_law_a1(
     freq: jax.Array,
     log_amplitude: jax.Array,
     log_f_b: jax.Array,
-    n_1: float | jax.Array,
-    n_2: float | jax.Array,
-    a_1: float | jax.Array,
+    n_1: jax.Array,
+    n_2: jax.Array,
+    a_1: jax.Array,
 ) -> jax.Array:
     r"""
     Broken power law with direct smoothness parameter ``a_1``.
@@ -246,6 +251,16 @@ def broken_power_law_a1(
             \bigl(\tfrac{1}{2} + \tfrac{1}{2} x^{a_1}\bigr)^{(n_2 - n_1)/a_1}
 
     with :math:`x = f / f_b`.
+
+    Args:
+        freq: Frequency grid (Hz).
+        log_amplitude: log10 amplitude.
+        log_f_b: log10 of the break frequency (Hz).
+        n_1, n_2: Spectral indices below/above the break.
+        a_1: Transition smoothness parameter.
+
+    Returns:
+        Spectrum evaluated at ``freq``.
     """
     x = freq / 10.0**log_f_b
     return 10.0**log_amplitude * x**n_1 * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
@@ -256,11 +271,11 @@ def jac_double_broken_power_law_amp_freqs(
     log_amplitude: jax.Array,
     log_f_1: jax.Array,
     log_f_2: jax.Array,
-    n_1: float | jax.Array,
-    n_2: float | jax.Array,
-    n_3: float | jax.Array,
-    a_1: float | jax.Array,
-    a_2: float | jax.Array,
+    n_1: jax.Array,
+    n_2: jax.Array,
+    n_3: jax.Array,
+    a_1: jax.Array,
+    a_2: jax.Array,
 ) -> jax.Array:
     """
     Analytic partials of :func:`double_broken_power_law` w.r.t. the three
@@ -296,9 +311,9 @@ def jac_broken_power_law_a1_amp_freq(
     freq: jax.Array,
     log_amplitude: jax.Array,
     log_f_b: jax.Array,
-    n_1: float | jax.Array,
-    n_2: float | jax.Array,
-    a_1: float | jax.Array,
+    n_1: jax.Array,
+    n_2: jax.Array,
+    a_1: jax.Array,
 ) -> jax.Array:
     """
     Analytic partials of :func:`broken_power_law_a1` w.r.t. the two "outer"

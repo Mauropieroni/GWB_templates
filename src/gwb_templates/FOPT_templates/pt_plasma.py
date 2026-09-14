@@ -1,6 +1,6 @@
 r"""
-Combined sound-wave + MHD-turbulence GW spectrum from a cosmological
-first-order phase transition.
+Combined sound-wave + MHD-turbulence GW spectrum from a cosmological first-order phase
+transition.
 
 The turbulence source energy is set to a fraction ``epsilon`` of the bulk
 kinetic energy: ``log_Omega_s = log_K + log10(epsilon)``.
@@ -9,17 +9,14 @@ kinetic energy: ``log_Omega_s = log_K + log10(epsilon)``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.FOPT_templates.pt_sound_waves import PtSoundWaves
 from gwb_templates.FOPT_templates.pt_turbulence import PtTurbulence
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class PtPlasma(AnalyticTemplate):
@@ -37,8 +34,7 @@ class PtPlasma(AnalyticTemplate):
     log_T_star
         :math:`\log_{10}` of the transition temperature in GeV.
     epsilon
-        Fraction of bulk kinetic energy that feeds the MHD-turbulence
-        source.
+        Fraction of bulk kinetic energy that feeds the MHD-turbulence source.
 
     Configuration
     -------------
@@ -55,13 +51,13 @@ class PtPlasma(AnalyticTemplate):
         High-frequency spectral index of the sound wave contribution.
         Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]`.
     transition_smoothness_low_f_sw
-        Smoothness of the transition between the low and intermediate frequency
-        spectral slopes of the sound wave contribution.
-        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+        Smoothness of the transition between the low and intermediate frequency spectral
+        slopes of the sound wave contribution. Defaults to
+        `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
     transition_smoothness_high_f_sw
         Smoothness of the transition between the intermediate and high frequency
-        spectral slopes of the sound wave contribution.
-        Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
+        spectral slopes of the sound wave contribution. Defaults to
+        `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     amplitude_prefactor_turb
         Numerical factor in the amplitude of the turbulence contribution.
         Defaults to `PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR`.
@@ -75,14 +71,31 @@ class PtPlasma(AnalyticTemplate):
         High-frequency spectral index of the turbulencee contribution.
         Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2]`.
     transition_smoothness_low_f_turb
-        Smoothness of the transition between the low and intermediate frequency
-        spectral slopes of the turbulence contribution.
-        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+        Smoothness of the transition between the low and intermediate frequency spectral
+        slopes of the turbulence contribution. Defaults to
+        `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]`.
     transition_smoothness_high_f_turb
         Smoothness of the transition between the intermediate and high frequency
-        spectral slopes of the turbulence contribution.
-        Defaults to `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]`.
+        spectral slopes of the turbulence contribution. Defaults to
+        `PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "pt_plasma"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "PT Plasma (SW + Turbulence)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_K": r"$\log_{10}K$",
+        "log_R_H_star": r"$\log_{10}(R_* H_*)$",
+        "xi_w": r"$\xi_w$",
+        "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
+        "epsilon": r"$\epsilon$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_K": {"min": -4.0, "max": 0.0},
+        "log_R_H_star": {"min": -3.0, "max": 0.0},
+        "xi_w": {"min": 0.01, "max": 0.99},
+        "log_T_star": {"min": -2.0, "max": 4.0},
+        "epsilon": {"min": 0.0, "max": 1.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -141,85 +154,69 @@ class PtPlasma(AnalyticTemplate):
 
     def __init__(
         self,
-        amplitude_prefactor_sw: float = PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR,
-        spectral_index_low_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0],
-        spectral_index_mid_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1],
-        spectral_index_high_f_sw: float = PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2],
-        transition_smoothness_low_f_sw: float =
-        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3],
-        transition_smoothness_high_f_sw: float =
-        PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4],
-        amplitude_prefactor_turb: float = PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR,
-        spectral_index_low_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0],
-        spectral_index_mid_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1],
-        spectral_index_high_f_turb: float = PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2],
-        transition_smoothness_low_f_turb: float =
-        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3],
-        transition_smoothness_high_f_turb: float =
-        PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4],
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        amplitude_prefactor_sw: jax.Array = PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_sw: jax.Array = (
+            PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0]
+        ),
+        spectral_index_mid_f_sw: jax.Array = (
+            PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1]
+        ),
+        spectral_index_high_f_sw: jax.Array = (
+            PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]
+        ),
+        transition_smoothness_low_f_sw: jax.Array = (
+            PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]
+        ),
+        transition_smoothness_high_f_sw: jax.Array = (
+            PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]
+        ),
+        amplitude_prefactor_turb: jax.Array = PtTurbulence.DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f_turb: jax.Array = (
+            PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[0]
+        ),
+        spectral_index_mid_f_turb: jax.Array = (
+            PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[1]
+        ),
+        spectral_index_high_f_turb: jax.Array = (
+            PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[2]
+        ),
+        transition_smoothness_low_f_turb: jax.Array = (
+            PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[3]
+        ),
+        transition_smoothness_high_f_turb: jax.Array = (
+            PtTurbulence.DEFAULT_SPECTRAL_EXPONENTS[4]
+        ),
+        **kwargs: Any,
     ) -> None:
-        default_labels = {
-            "log_K": r"$\log_{10}K$",
-            "log_R_H_star": r"$\log_{10}(R_* H_*)$",
-            "xi_w": r"$\xi_w$",
-            "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
-            "epsilon": r"$\epsilon$",
-        }
-        default_priors = {
-            "log_K": {"min": -4.0, "max": 0.0},
-            "log_R_H_star": {"min": -3.0, "max": 0.0},
-            "xi_w": {"min": 0.01, "max": 0.99},
-            "log_T_star": {"min": -2.0, "max": 4.0},
-            "epsilon": {"min": 0.0, "max": 1.0},
-        }
-
         # Sub-template instances; reused on every call. Both are pure JAX,
         # so this is safe to construct once at init time.
         self._sound_waves = PtSoundWaves(
-            float(amplitude_prefactor_sw),
-            float(spectral_index_low_f_sw),
-            float(spectral_index_mid_f_sw),
-            float(spectral_index_high_f_sw),
-            float(transition_smoothness_low_f_sw),
-            float(transition_smoothness_high_f_sw)
+            amplitude_prefactor_sw,
+            spectral_index_low_f_sw,
+            spectral_index_mid_f_sw,
+            spectral_index_high_f_sw,
+            transition_smoothness_low_f_sw,
+            transition_smoothness_high_f_sw,
         )
         self._turbulence = PtTurbulence(
-            float(amplitude_prefactor_turb),
-            float(spectral_index_low_f_turb),
-            float(spectral_index_mid_f_turb),
-            float(spectral_index_high_f_turb),
-            float(transition_smoothness_low_f_turb),
-            float(transition_smoothness_high_f_turb)
+            amplitude_prefactor_turb,
+            spectral_index_low_f_turb,
+            spectral_index_mid_f_turb,
+            spectral_index_high_f_turb,
+            transition_smoothness_low_f_turb,
+            transition_smoothness_high_f_turb,
         )
 
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "PT Plasma (SW + Turbulence)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_K: ArrayLike,
-        log_R_H_star: ArrayLike,
-        xi_w: ArrayLike,
-        log_T_star: ArrayLike,
-        epsilon: ArrayLike,
+        frequency: jax.Array,
+        log_K: jax.Array,
+        log_R_H_star: jax.Array,
+        xi_w: jax.Array,
+        log_T_star: jax.Array,
+        epsilon: jax.Array,
     ) -> jax.Array:
         r"""Evaluate the combined SW + MHD-turbulence FOPT spectrum."""
         sw = self._sound_waves.omega_gw_h2(

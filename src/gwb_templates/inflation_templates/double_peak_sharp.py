@@ -4,11 +4,10 @@ Double-peak envelope modulated by a sharp-feature oscillation.
 Two parametrizations:
 
 * :class:`DoublePeakSharp` — linear ``A_sharp``, ``omega_sharp_Hz``.
-* :class:`DoublePeakSharpLog` — log-scaled amplitude and frequency for
-  wide-range priors.
+* :class:`DoublePeakSharpLog` — log-scaled amplitude and frequency for wide-range
+  priors.
 
-The template is the product of the double-peak spectrum and a sharp-feature
-modulation:
+The template is the product of the double-peak spectrum and a sharp-feature modulation:
 
 .. math::
 
@@ -21,37 +20,33 @@ Reference: arXiv:2407.04356.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
 import jax.scipy.special
-import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
 
-ArrayLike: TypeAlias = jtp.ArrayLike
-
 
 def _double_peak_envelope_and_grad(
-    frequency: ArrayLike,
-    log_amplitude: ArrayLike,
-    log_pivot: ArrayLike,
-    beta: ArrayLike,
-    k1: ArrayLike,
-    k2: ArrayLike,
-    rho: ArrayLike,
-    gamma: ArrayLike,
-    c1: float,
-    tilt_p: float,
+    frequency: jax.Array,
+    log_amplitude: jax.Array,
+    log_pivot: jax.Array,
+    beta: jax.Array,
+    k1: jax.Array,
+    k2: jax.Array,
+    rho: jax.Array,
+    gamma: jax.Array,
+    c1: jax.Array,
+    tilt_p: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
     """Return (envelope, dE/dpars) with pars ordered like the envelope signature."""
     amp = 10.0**log_amplitude
     pivot = 10.0**log_pivot
 
-    x = jnp.asarray(frequency) / pivot
+    x = frequency / pivot
     x1 = x / k1
     c1_k1 = c1 / k1
     log10x2 = jnp.log10(x / k2)
@@ -78,8 +73,7 @@ def _double_peak_envelope_and_grad(
         * (-tilt_p * ln10 + sign_c1_k1 * exp1 / arg1 * (x1 / (c1_k1 - 1.0)) * ln10)
     )
     d_second_logpiv = (
-        amp * second_term * log10x2 / rho**2
-        + amp * log_normal * gamma * erfc_deriv
+        amp * second_term * log10x2 / rho**2 + amp * log_normal * gamma * erfc_deriv
     )
     d_logpiv = d_first_logpiv + d_second_logpiv
     d_beta = amp * first_term / beta
@@ -96,23 +90,21 @@ def _double_peak_envelope_and_grad(
     d_rho = amp * second_term * log10x2**2 / rho**3
     d_gamma = amp * log_normal * erfc_deriv * (-log10x2)
 
-    dE = jnp.stack(
-        [d_logA, d_logpiv, d_beta, d_k1, d_k2, d_rho, d_gamma], axis=-1
-    )
+    dE = jnp.stack([d_logA, d_logpiv, d_beta, d_k1, d_k2, d_rho, d_gamma], axis=-1)
     return envelope, dE
 
 
 def _double_peak_envelope(
-    frequency: ArrayLike,
-    log_amplitude: ArrayLike,
-    log_pivot: ArrayLike,
-    beta: ArrayLike,
-    k1: ArrayLike,
-    k2: ArrayLike,
-    rho: ArrayLike,
-    gamma: ArrayLike,
-    c1: float,
-    tilt_p: float,
+    frequency: jax.Array,
+    log_amplitude: jax.Array,
+    log_pivot: jax.Array,
+    beta: jax.Array,
+    k1: jax.Array,
+    k2: jax.Array,
+    rho: jax.Array,
+    gamma: jax.Array,
+    c1: jax.Array,
+    tilt_p: jax.Array,
 ) -> jax.Array:
     """Internal pure-JAX double-peak envelope used by the composite classes."""
     amplitude = 10.0**log_amplitude
@@ -169,8 +161,23 @@ class DoublePeakSharp(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    DEFAULT_C1: ClassVar[float] = math.sqrt(2.0 / 3.0)
-    DEFAULT_TILT_P: ClassVar[float] = 2.5
+    DEFAULT_C1: ClassVar[jax.Array] = jnp.sqrt(jnp.array(2.0 / 3.0))
+    DEFAULT_TILT_P: ClassVar[jax.Array] = jnp.array(2.5)
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "double_peak_sharp"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Peak + Sharp Feature"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        **_ENVELOPE_LABELS,
+        "A_sharp": r"$A_{\rm s}$",
+        "omega_sharp_Hz": r"$\omega_{\rm s}\,[\mathrm{Hz}^{-1}]$",
+        "phase_sharp": r"$\phi_{\rm s}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        **_ENVELOPE_PRIORS,
+        "A_sharp": {"min": -1.0, "max": 1.0},
+        "omega_sharp_Hz": {"min": 0.0, "max": 1e5},
+        "phase_sharp": {"min": -3.14159, "max": 3.14159},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -194,58 +201,27 @@ class DoublePeakSharp(AnalyticTemplate):
 
     def __init__(
         self,
-        c1: float = DEFAULT_C1,
-        tilt_p: float = DEFAULT_TILT_P,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        c1: jax.Array = DEFAULT_C1,
+        tilt_p: jax.Array = DEFAULT_TILT_P,
+        **kwargs: Any,
     ) -> None:
-        self.c1: float = float(c1)
-        self.tilt_p: float = float(tilt_p)
-
-        default_labels = {
-            **_ENVELOPE_LABELS,
-            "A_sharp": r"$A_{\rm s}$",
-            "omega_sharp_Hz": r"$\omega_{\rm s}\,[\mathrm{Hz}^{-1}]$",
-            "phase_sharp": r"$\phi_{\rm s}$",
-        }
-        default_priors = {
-            **_ENVELOPE_PRIORS,
-            "A_sharp": {"min": -1.0, "max": 1.0},
-            "omega_sharp_Hz": {"min": 0.0, "max": 1e5},
-            "phase_sharp": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Double Peak + Sharp Feature"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        self.c1: jax.Array = c1
+        self.tilt_p: jax.Array = tilt_p
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        beta: ArrayLike,
-        k1: ArrayLike,
-        k2: ArrayLike,
-        rho: ArrayLike,
-        gamma: ArrayLike,
-        A_sharp: ArrayLike,
-        omega_sharp_Hz: ArrayLike,
-        phase_sharp: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_pivot: jax.Array,
+        beta: jax.Array,
+        k1: jax.Array,
+        k2: jax.Array,
+        rho: jax.Array,
+        gamma: jax.Array,
+        A_sharp: jax.Array,
+        omega_sharp_Hz: jax.Array,
+        phase_sharp: jax.Array,
     ) -> jax.Array:
         envelope = _double_peak_envelope(
             frequency,
@@ -264,20 +240,27 @@ class DoublePeakSharp(AnalyticTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on envelope x sharp-feature."""
-        freq = jnp.asarray(frequency)
         E, dE = _double_peak_envelope_and_grad(
-            freq, theta[0], theta[1], theta[2], theta[3], theta[4], theta[5],
-            theta[6], self.c1, self.tilt_p,
+            frequency,
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+            theta[4],
+            theta[5],
+            theta[6],
+            self.c1,
+            self.tilt_p,
         )
         A_sharp, omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
-        arg = omega_sharp_Hz * freq + phase_sharp
+        arg = omega_sharp_Hz * frequency + phase_sharp
         F = 1.0 + A_sharp * jnp.cos(arg)
         d_A = jnp.cos(arg)
-        d_omega = -A_sharp * jnp.sin(arg) * freq
+        d_omega = -A_sharp * jnp.sin(arg) * frequency
         d_phi = -A_sharp * jnp.sin(arg)
         dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
@@ -285,8 +268,8 @@ class DoublePeakSharp(AnalyticTemplate):
 
 class DoublePeakSharpLog(AnalyticTemplate):
     r"""
-    Double-peak envelope multiplied by a log-parametrized sharp-feature
-    modulation. Identical physics to :class:`DoublePeakSharp`.
+    Double-peak envelope multiplied by a log-parametrized sharp-feature modulation.
+    Identical physics to :class:`DoublePeakSharp`.
 
     Free parameters
     ---------------
@@ -300,8 +283,23 @@ class DoublePeakSharpLog(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    DEFAULT_C1: ClassVar[float] = math.sqrt(2.0 / 3.0)
-    DEFAULT_TILT_P: ClassVar[float] = 2.5
+    DEFAULT_C1: ClassVar[jax.Array] = jnp.sqrt(jnp.array(2.0 / 3.0))
+    DEFAULT_TILT_P: ClassVar[jax.Array] = jnp.array(2.5)
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "double_peak_sharp_log"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Peak + Sharp Feature (log params)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        **_ENVELOPE_LABELS,
+        "log_A_sharp": r"$\log_{10}A_{\rm s}$",
+        "log_omega_sharp_Hz": r"$\log_{10}(\omega_{\rm s}/\mathrm{Hz}^{-1})$",
+        "phase_sharp": r"$\phi_{\rm s}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        **_ENVELOPE_PRIORS,
+        "log_A_sharp": {"min": -3.0, "max": 0.0},
+        "log_omega_sharp_Hz": {"min": 0.0, "max": 5.0},
+        "phase_sharp": {"min": -3.14159, "max": 3.14159},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -325,58 +323,27 @@ class DoublePeakSharpLog(AnalyticTemplate):
 
     def __init__(
         self,
-        c1: float = DEFAULT_C1,
-        tilt_p: float = DEFAULT_TILT_P,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        c1: jax.Array = DEFAULT_C1,
+        tilt_p: jax.Array = DEFAULT_TILT_P,
+        **kwargs: Any,
     ) -> None:
-        self.c1: float = float(c1)
-        self.tilt_p: float = float(tilt_p)
-
-        default_labels = {
-            **_ENVELOPE_LABELS,
-            "log_A_sharp": r"$\log_{10}A_{\rm s}$",
-            "log_omega_sharp_Hz": r"$\log_{10}(\omega_{\rm s}/\mathrm{Hz}^{-1})$",
-            "phase_sharp": r"$\phi_{\rm s}$",
-        }
-        default_priors = {
-            **_ENVELOPE_PRIORS,
-            "log_A_sharp": {"min": -3.0, "max": 0.0},
-            "log_omega_sharp_Hz": {"min": 0.0, "max": 5.0},
-            "phase_sharp": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Double Peak + Sharp Feature (log params)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        self.c1: jax.Array = c1
+        self.tilt_p: jax.Array = tilt_p
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        beta: ArrayLike,
-        k1: ArrayLike,
-        k2: ArrayLike,
-        rho: ArrayLike,
-        gamma: ArrayLike,
-        log_A_sharp: ArrayLike,
-        log_omega_sharp_Hz: ArrayLike,
-        phase_sharp: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_pivot: jax.Array,
+        beta: jax.Array,
+        k1: jax.Array,
+        k2: jax.Array,
+        rho: jax.Array,
+        gamma: jax.Array,
+        log_A_sharp: jax.Array,
+        log_omega_sharp_Hz: jax.Array,
+        phase_sharp: jax.Array,
     ) -> jax.Array:
         envelope = _double_peak_envelope(
             frequency,
@@ -397,23 +364,30 @@ class DoublePeakSharpLog(AnalyticTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on envelope x log sharp-feature."""
-        freq = jnp.asarray(frequency)
         E, dE = _double_peak_envelope_and_grad(
-            freq, theta[0], theta[1], theta[2], theta[3], theta[4], theta[5],
-            theta[6], self.c1, self.tilt_p,
+            frequency,
+            theta[0],
+            theta[1],
+            theta[2],
+            theta[3],
+            theta[4],
+            theta[5],
+            theta[6],
+            self.c1,
+            self.tilt_p,
         )
         log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
         A_sharp = 10.0**log_A_sharp
         omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        arg = omega_sharp_Hz * freq + phase_sharp
+        arg = omega_sharp_Hz * frequency + phase_sharp
         F = 1.0 + A_sharp * jnp.cos(arg)
         ln10 = jnp.log(10.0)
         d_logA = ln10 * A_sharp * jnp.cos(arg)
-        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * freq
+        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * frequency
         d_phi = -A_sharp * jnp.sin(arg)
         dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

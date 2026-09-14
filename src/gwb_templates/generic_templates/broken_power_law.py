@@ -8,24 +8,21 @@ General-purpose 5-parameter smooth BPL:
     \Omega_{\mathrm{GW}} h^2(f) = \Omega_* h^2\,
         \frac{x^{n_1}}{\left(\tfrac{1}{2}(1 + x^{1/\delta})\right)^{(n_1 - n_2)\delta}}
 
-with :math:`x = f / f_*` and :math:`\delta = 10^{\log_{10}\delta}`. At low
-frequencies the tilt approaches :math:`n_1`; at high frequencies
-:math:`n_2`. Setting ``log_transition = 0`` (:math:`\delta = 1`) recovers
+with :math:`x = f / f_*` and :math:`\delta = 10^{\log_{10}\delta}`. At low frequencies
+the tilt approaches :math:`n_1`; at high frequencies :math:`n_2`. Setting
+``log_transition = 0`` (:math:`\delta = 1`) recovers
 :class:`BrokenPowerLawFixedSmoothness`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class BrokenPowerLaw(AnalyticTemplate):
@@ -46,53 +43,34 @@ class BrokenPowerLaw(AnalyticTemplate):
         :math:`\log_{10}\delta`, controlling the transition sharpness.
     """
 
+    DEFAULT_MODEL_NAME: ClassVar[str] = "broken_power_law"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Broken Power Law"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        "log_pivot": r"$\log_{10}(f_*/\mathrm{Hz})$",
+        "tilt_1": r"$n_1$",
+        "tilt_2": r"$n_2$",
+        "log_transition": r"$\log_{10}\delta$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {"min": -20.0, "max": -5.0},
+        "log_pivot": {"min": -5.0, "max": 0.0},
+        "tilt_1": {"min": -10.0, "max": 10.0},
+        "tilt_2": {"min": -10.0, "max": 10.0},
+        "log_transition": {"min": -3.0, "max": 3.0},
+    }
+
     #: TODO: cite
     bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-            "log_pivot": r"$\log_{10}(f_*/\mathrm{Hz})$",
-            "tilt_1": r"$n_1$",
-            "tilt_2": r"$n_2$",
-            "log_transition": r"$\log_{10}\delta$",
-        }
-        default_priors = {
-            "log_amplitude": {"min": -20.0, "max": -5.0},
-            "log_pivot": {"min": -5.0, "max": 0.0},
-            "tilt_1": {"min": -10.0, "max": 10.0},
-            "tilt_2": {"min": -10.0, "max": 10.0},
-            "log_transition": {"min": -3.0, "max": 3.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label if model_label is not None else "Broken Power Law"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
-
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_pivot: ArrayLike,
-        tilt_1: ArrayLike,
-        tilt_2: ArrayLike,
-        log_transition: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_pivot: jax.Array,
+        tilt_1: jax.Array,
+        tilt_2: jax.Array,
+        log_transition: jax.Array,
     ) -> jax.Array:
         r"""
         Evaluate the smooth broken-power-law spectrum at ``frequency``.

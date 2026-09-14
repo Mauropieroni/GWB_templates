@@ -8,9 +8,9 @@ Two-parameter model for a GWB:
     \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha_{\mathrm{PL}}}
         \left(\frac{f}{f_{\mathrm{pivot}}}\right)^{n_T}
 
-The default pivot frequency is 3 mHz (roughly the centre of the LISA
-band). This is the simplest phenomenological GWB model and is widely
-used as a baseline in stochastic-background searches.
+The default pivot frequency is 3 mHz (roughly the centre of the LISA band). This is the
+simplest phenomenological GWB model and is widely used as a baseline in stochastic-
+background searches.
 """
 
 from __future__ import annotations
@@ -38,14 +38,24 @@ class PowerLaw(AnalyticTemplate):
     Configuration
     -------------
     pivot
-        Reference frequency (Hz) used to normalize the power law.
-        Defaults to :attr:`DEFAULT_PIVOT` (3 mHz). Stored as an instance
-        attribute set at construction time; instantiate two ``PowerLaw``
-        objects to sweep across pivots.
+        Reference frequency (Hz) used to normalize the power law. Defaults to
+        :attr:`DEFAULT_PIVOT` (3 mHz). Stored as an instance attribute set at
+        construction time; instantiate two ``PowerLaw`` objects to sweep across pivots.
     """
 
     #: Default pivot frequency in Hz (LISA-band centre).
-    DEFAULT_PIVOT: ClassVar[float] = 3e-3
+    DEFAULT_PIVOT: ClassVar[jax.Array] = jnp.array(3e-3)
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "power_law"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Power Law Model"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\alpha_{\mathrm{PL}}$",
+        "tilt": r"$n_{T}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {"min": -20.0, "max": -5.0},
+        "tilt": {"min": -10.0, "max": 10.0},
+    }
 
     #: TODO: populate with the canonical PL-template references once we
     #: settle on which papers to cite by default.
@@ -53,46 +63,18 @@ class PowerLaw(AnalyticTemplate):
 
     def __init__(
         self,
-        pivot: float = DEFAULT_PIVOT,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        pivot: jax.Array = DEFAULT_PIVOT,
+        **kwargs: Any,
     ) -> None:
         """
         Args:
             pivot: Reference frequency in Hz.
-            model_name: Override instance identifier (see
-                :class:`~gwb_templates.template.Template`).
-            model_label: Override display label. Defaults to
-                ``"Power Law Model"``.
-            parameter_labels: Sparse override map for parameter display
-                labels. Defaults provide LaTeX-friendly labels.
-            prior_by_param: Sparse override map for parameter priors.
-                Defaults to a broad uniform prior on each parameter.
+            **kwargs: Forwarded to :class:`~gwb_templates.template.Template`
+                (``model_name``, ``model_label``, ``parameter_labels``,
+                ``prior_by_param``).
         """
-        self.pivot: float = float(pivot)
-
-        default_labels = {
-            "log_amplitude": r"$\alpha_{\mathrm{PL}}$",
-            "tilt": r"$n_{T}$",
-        }
-        default_priors = {
-            "log_amplitude": {"min": -20.0, "max": -5.0},
-            "tilt": {"min": -10.0, "max": 10.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=model_label if model_label is not None else "Power Law Model",
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        self.pivot: jax.Array = pivot
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
@@ -109,8 +91,7 @@ class PowerLaw(AnalyticTemplate):
             tilt: Spectral index.
 
         Returns:
-            Spectrum :math:`\Omega_{\mathrm{GW}} h^2(f)` at each input
-            frequency.
+            Spectrum :math:`\Omega_{\mathrm{GW}} h^2(f)` at each input frequency.
         """
         x = frequency / self.pivot
         return 10.0**log_amplitude * x**tilt
@@ -124,8 +105,8 @@ class PowerLaw(AnalyticTemplate):
         Analytic Jacobian of the power-law spectrum.
 
         :math:`\partial/\partial(\log_{10}A) = \text{model} \cdot \ln 10`,
-        :math:`\partial/\partial(\text{tilt})
-        = \text{model} \cdot \ln(f/f_{\rm pivot})`.
+        :math:`\partial/\partial(\text{tilt}) = \text{model} \cdot
+        \ln(f/f_{\rm pivot})`.
         """
         log_amplitude, tilt = theta
         model = self.omega_gw_h2(frequency, log_amplitude, tilt)

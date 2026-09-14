@@ -1,28 +1,26 @@
 r"""
-Sound-wave contribution to the GW spectrum from a cosmological first-order
-phase transition.
+Sound-wave contribution to the GW spectrum from a cosmological first-order phase
+transition.
 
 Based on:
 
-R. Jinno, T. Konstandin, H. Rubira and I. Stomberg,
-"Higgsless simulations of cosmological phase transitions and gravitational
-waves",
-JCAP 02 (2023), 011; [arXiv:2209.04369 [astro-ph.CO]].
+R. Jinno, T. Konstandin, H. Rubira and I. Stomberg, "Higgsless simulations of
+cosmological phase transitions and gravitational waves", JCAP 02 (2023), 011;
+[arXiv:2209.04369 [astro-ph.CO]].
 
-Also see: M. Hindmarsh, S.J. Huber, K. Rummukainen and D.J. Weir,
-"Shape of the acoustic gravitational wave power spectrum from a first
-order phase transition", Phys.Rev.D 96 (2017) 103520; [arXiv:1704.05871
-[astro-ph.CO]] (original double-broken-power-law acoustic shape).
+Also see: M. Hindmarsh, S.J. Huber, K. Rummukainen and D.J. Weir, "Shape of the acoustic
+gravitational wave power spectrum from a first order phase transition", Phys.Rev.D 96
+(2017) 103520; [arXiv:1704.05871 [astro-ph.CO]] (original double-broken-power-law
+acoustic shape).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.FOPT_templates.pt_base import (
     a_hubble,
@@ -32,8 +30,6 @@ from gwb_templates.FOPT_templates.pt_base import (
     redshift_omega,
 )
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class PtSoundWaves(AnalyticTemplate):
@@ -66,25 +62,42 @@ class PtSoundWaves(AnalyticTemplate):
         High-frequency spectral index. Defaults to
         `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]`.
     transition_smoothness_low_f
-        Smoothness of the transition between the low and intermediate frequency
-        spectral slopes. Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+        Smoothness of the transition between the low and intermediate frequency spectral
+        slopes. Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
     transition_smoothness_high_f
         Smoothness of the transition between the intermediate and high frequency
         spectral slopes. Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
 
     #: Default spectral amplitude prefactor (Jinno et al. 2023).
-    DEFAULT_AMPLITUDE_PREFACTOR: ClassVar[float] = 0.11
+    DEFAULT_AMPLITUDE_PREFACTOR: ClassVar[jax.Array] = jnp.array(0.11)
     #: Sound speed in the relativistic plasma (1/sqrt(3)).
-    SOUND_SPEED: ClassVar[float] = 0.5773502691896258
+    SOUND_SPEED: ClassVar[jax.Array] = jnp.array(0.5773502691896258)
     #: Default values for fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
-    DEFAULT_SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
-        3.0,
-        1.0,
-        -3.0,
-        2.0,
-        4.0,
+    DEFAULT_SPECTRAL_EXPONENTS: ClassVar[
+        tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]
+    ] = (
+        jnp.array(3.0),
+        jnp.array(1.0),
+        jnp.array(-3.0),
+        jnp.array(2.0),
+        jnp.array(4.0),
     )
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "pt_sound_waves"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "PT Sound Waves"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_K": r"$\log_{10}K$",
+        "log_R_H_star": r"$\log_{10}(R_* H_*)$",
+        "xi_w": r"$\xi_w$",
+        "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_K": {"min": -4.0, "max": 0.0},
+        "log_R_H_star": {"min": -3.0, "max": 0.0},
+        "xi_w": {"min": 0.01, "max": 0.99},
+        "log_T_star": {"min": -2.0, "max": 4.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -143,58 +156,34 @@ class PtSoundWaves(AnalyticTemplate):
 
     def __init__(
         self,
-        amplitude_prefactor: float = DEFAULT_AMPLITUDE_PREFACTOR,
-        spectral_index_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[0],
-        spectral_index_mid_f: float = DEFAULT_SPECTRAL_EXPONENTS[1],
-        spectral_index_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[2],
-        transition_smoothness_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[3],
-        transition_smoothness_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[4],
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        amplitude_prefactor: jax.Array = DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f: jax.Array = DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f: jax.Array = DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f: jax.Array = DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f: jax.Array = DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f: jax.Array = DEFAULT_SPECTRAL_EXPONENTS[4],
+        **kwargs: Any,
     ) -> None:
-        self.amplitude_prefactor: float = float(amplitude_prefactor)
-        self.spectral_exponents: tuple[float, float, float, float, float] = (
-            float(spectral_index_low_f),
-            float(spectral_index_mid_f),
-            float(spectral_index_high_f),
-            float(transition_smoothness_low_f),
-            float(transition_smoothness_high_f),
+        self.amplitude_prefactor: jax.Array = amplitude_prefactor
+        self.spectral_exponents: tuple[
+            jax.Array, jax.Array, jax.Array, jax.Array, jax.Array
+        ] = (
+            spectral_index_low_f,
+            spectral_index_mid_f,
+            spectral_index_high_f,
+            transition_smoothness_low_f,
+            transition_smoothness_high_f,
         )
 
-        default_labels = {
-            "log_K": r"$\log_{10}K$",
-            "log_R_H_star": r"$\log_{10}(R_* H_*)$",
-            "xi_w": r"$\xi_w$",
-            "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
-        }
-        default_priors = {
-            "log_K": {"min": -4.0, "max": 0.0},
-            "log_R_H_star": {"min": -3.0, "max": 0.0},
-            "xi_w": {"min": 0.01, "max": 0.99},
-            "log_T_star": {"min": -2.0, "max": 4.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=model_label if model_label is not None else "PT Sound Waves",
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_K: ArrayLike,
-        log_R_H_star: ArrayLike,
-        xi_w: ArrayLike,
-        log_T_star: ArrayLike,
+        frequency: jax.Array,
+        log_K: jax.Array,
+        log_R_H_star: jax.Array,
+        xi_w: jax.Array,
+        log_T_star: jax.Array,
     ) -> jax.Array:
         r"""Evaluate the sound-wave FOPT spectrum at ``frequency``."""
         K = 10.0**log_K
@@ -267,9 +256,7 @@ class PtSoundWaves(AnalyticTemplate):
         f_2 = 0.5 * aH_star / R_H_star * xi_bubble / xi_shell
         r_f = 2.5 * xi_bubble / xi_shell
         norm = (jnp.sqrt(2.0) + 2.0 * r_f / (1.0 + r_f**2)) / jnp.pi
-        h2Omega2 = (
-            norm * h2FGW0 * self.amplitude_prefactor * K**2 * H_tau * R_H_star
-        )
+        h2Omega2 = norm * h2FGW0 * self.amplitude_prefactor * K**2 * H_tau * R_H_star
 
         n_1, n_2, n_3, a_1, a_2 = self.spectral_exponents
         J_inner = jac_double_broken_power_law_amp_freqs(

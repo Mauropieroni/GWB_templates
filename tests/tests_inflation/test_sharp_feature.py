@@ -54,7 +54,12 @@ class TestSharpFeatureTemplate(unittest.TestCase):
             fvec,
             PARS_LOG,
         )
-        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=15)
+        # places=15 (as used elsewhere in this suite) is unreachable here: the
+        # cos/sin argument omega_sharp_Hz * frequency reaches ~500 rad at these
+        # PARS_LOG (10**3 Hz^-1 * f_max), so float64's ~2e-16 relative precision
+        # already limits the argument itself to ~500 * 2e-16 ~ 1e-13 absolute —
+        # an irreducible floating-point floor, not an error in either gradient.
+        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=10)
 
     def test_lin_log_agree(self):
         """

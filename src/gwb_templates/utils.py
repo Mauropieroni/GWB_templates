@@ -1,22 +1,12 @@
 # Global imports
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from collections.abc import Iterable
+from typing import Any
 
 import os
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
-import numpy as np
 from interpax import Interpolator1D
-
-from collections.abc import Iterable
-
-Array: TypeAlias = jax.Array
-AnyArray: TypeAlias = jax.Array | np.ndarray
-ArrayLike: TypeAlias = jtp.ArrayLike
-TemplateFn: TypeAlias = Callable[..., Array]
-IndexedDerivativeFn: TypeAlias = Callable[..., Array]
-
 
 # Change jax config to use double precision
 jax.config.update("jax_enable_x64", True)
@@ -39,18 +29,17 @@ def check_paths(paths: Iterable[str]) -> None:
 
 
 def gradient_autodiff(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
-    Build a vectorized first-derivative tensor.
+    Build a vectorized first-derivative tensor via forward-mode autodiff.
 
     Args:
-        npars: Number of model parameters.
-        function: Callable that takes parameter index and returns dS/df.
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
         frequency: Frequency grid.
         parameters: Parameter vector.
         *args: Additional positional arguments forwarded to function.
@@ -58,26 +47,22 @@ def gradient_autodiff(
 
     Returns:
         Array with parameter axis in the last position: (..., npars).
-
     """
-
     return jax.jacfwd(function, argnums=1)(frequency, parameters, *args, **kwargs)
 
 
 def hessian_autodiff(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
-    Build a vectorized second-derivative tensor.
+    Build a vectorized second-derivative tensor via forward-mode autodiff.
 
     Args:
-        npars: Number of model parameters.
-        function: Callable that takes two parameter indices and returns
-            second derivatives.
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
         frequency: Frequency grid.
         parameters: Parameter vector.
         *args: Additional positional arguments forwarded to function.
@@ -86,9 +71,7 @@ def hessian_autodiff(
     Returns:
         Array with the two parameter axes in the last two positions:
         (..., npars, npars).
-
     """
-
     # Keep parameter indices on the last two axes: (..., npars, npars)
     return jax.jacfwd(jax.jacfwd(function, argnums=1), argnums=1)(
         frequency, parameters, *args, **kwargs
@@ -96,230 +79,234 @@ def hessian_autodiff(
 
 
 def finite_difference_grad_theta(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     step: float = 1e-6,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
     Central finite-difference gradient with respect to model parameters.
-    """
-    params = np.asarray(parameters, dtype=float)
-    npars = params.size
 
-    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
-    grad = np.empty(f0.shape + (npars,), dtype=float)
+    Args:
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
+        frequency: Frequency grid.
+        parameters: Parameter vector.
+        *args: Additional positional arguments forwarded to function.
+        step: Central-difference step size.
+        **kwargs: Additional keyword arguments forwarded to function.
+
+    Returns:
+        Array with the parameter axis appended last: (..., npars).
+    """
+    npars = parameters.size
+
+    f0 = function(frequency, parameters, *args, **kwargs)
+    grad = jnp.empty(f0.shape + (npars,), dtype=float)
 
     for i in range(npars):
-        p_plus = params.copy()
-        p_minus = params.copy()
-        p_plus[i] += step
-        p_minus[i] -= step
+        p_plus = parameters.at[i].set(parameters[i] + step)
+        p_minus = parameters.at[i].set(parameters[i] - step)
 
-        f_plus = np.asarray(function(frequency, p_plus, *args, **kwargs), dtype=float)
-        f_minus = np.asarray(function(frequency, p_minus, *args, **kwargs), dtype=float)
-        grad[..., i] = (f_plus - f_minus) / (2.0 * step)
+        f_plus = function(frequency, p_plus, *args, **kwargs)
+        f_minus = function(frequency, p_minus, *args, **kwargs)
+        grad = grad.at[..., i].set((f_plus - f_minus) / (2.0 * step))
 
-    return jnp.asarray(grad)
+    return grad
 
 
 def finite_difference_hess_theta(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     step: float = 1e-5,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
     Central finite-difference Hessian with respect to model parameters.
-    """
-    params = np.asarray(parameters, dtype=float)
-    npars = params.size
 
-    f0 = np.asarray(function(frequency, params, *args, **kwargs), dtype=float)
-    hess = np.empty(f0.shape + (npars, npars), dtype=float)
+    Args:
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
+        frequency: Frequency grid.
+        parameters: Parameter vector.
+        *args: Additional positional arguments forwarded to function.
+        step: Central-difference step size.
+        **kwargs: Additional keyword arguments forwarded to function.
+
+    Returns:
+        Array with the two parameter axes appended last: (..., npars, npars).
+    """
+    npars = parameters.size
+
+    f0 = function(frequency, parameters, *args, **kwargs)
+    hess = jnp.empty(f0.shape + (npars, npars), dtype=float)
 
     for i in range(npars):
         for j in range(i, npars):
             if i == j:
-                p_plus = params.copy()
-                p_minus = params.copy()
-                p_plus[i] += step
-                p_minus[i] -= step
+                p_plus = parameters.at[i].set(parameters[i] + step)
+                p_minus = parameters.at[i].set(parameters[i] - step)
 
-                f_plus = np.asarray(
-                    function(frequency, p_plus, *args, **kwargs), dtype=float
-                )
-                f_minus = np.asarray(
-                    function(frequency, p_minus, *args, **kwargs), dtype=float
-                )
+                f_plus = function(frequency, p_plus, *args, **kwargs)
+                f_minus = function(frequency, p_minus, *args, **kwargs)
                 value = (f_plus - 2.0 * f0 + f_minus) / (step**2)
             else:
-                p_pp = params.copy()
-                p_pm = params.copy()
-                p_mp = params.copy()
-                p_mm = params.copy()
-                p_pp[i] += step
-                p_pp[j] += step
-                p_pm[i] += step
-                p_pm[j] -= step
-                p_mp[i] -= step
-                p_mp[j] += step
-                p_mm[i] -= step
-                p_mm[j] -= step
+                p_pp = parameters.at[i].set(parameters[i] + step)
+                p_pp = p_pp.at[j].set(p_pp[j] + step)
+                p_pm = parameters.at[i].set(parameters[i] + step)
+                p_pm = p_pm.at[j].set(p_pm[j] - step)
+                p_mp = parameters.at[i].set(parameters[i] - step)
+                p_mp = p_mp.at[j].set(p_mp[j] + step)
+                p_mm = parameters.at[i].set(parameters[i] - step)
+                p_mm = p_mm.at[j].set(p_mm[j] - step)
 
-                f_pp = np.asarray(
-                    function(frequency, p_pp, *args, **kwargs), dtype=float
-                )
-                f_pm = np.asarray(
-                    function(frequency, p_pm, *args, **kwargs), dtype=float
-                )
-                f_mp = np.asarray(
-                    function(frequency, p_mp, *args, **kwargs), dtype=float
-                )
-                f_mm = np.asarray(
-                    function(frequency, p_mm, *args, **kwargs), dtype=float
-                )
+                f_pp = function(frequency, p_pp, *args, **kwargs)
+                f_pm = function(frequency, p_pm, *args, **kwargs)
+                f_mp = function(frequency, p_mp, *args, **kwargs)
+                f_mm = function(frequency, p_mm, *args, **kwargs)
                 value = (f_pp - f_pm - f_mp + f_mm) / (4.0 * step**2)
 
-            hess[..., i, j] = value
-            hess[..., j, i] = value
+            hess = hess.at[..., i, j].set(value)
+            hess = hess.at[..., j, i].set(value)
 
-    return jnp.asarray(hess)
+    return hess
 
 
 def finite_difference_df(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     step: float = 1e-6,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
     Central finite-difference first derivative with respect to frequency.
+
+    Args:
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
+        frequency: Scalar or array of frequencies.
+        parameters: Parameter vector.
+        *args: Additional positional arguments forwarded to function.
+        step: Central-difference step size.
+        **kwargs: Additional keyword arguments forwarded to function.
+
+    Returns:
+        Array of the same shape as frequency.
     """
-    freq = np.asarray(frequency, dtype=float)
+    if frequency.ndim == 0:
+        f_plus = function(frequency + step, parameters, *args, **kwargs)
+        f_minus = function(frequency - step, parameters, *args, **kwargs)
+        return (f_plus - f_minus) / (2.0 * step)
 
-    if freq.ndim == 0:
-        f_plus = np.asarray(
-            function(freq + step, parameters, *args, **kwargs), dtype=float
-        )
-        f_minus = np.asarray(
-            function(freq - step, parameters, *args, **kwargs), dtype=float
-        )
-        return jnp.asarray((f_plus - f_minus) / (2.0 * step))
+    flat = frequency.ravel()
+    deriv = jnp.empty(flat.shape, dtype=float)
+    for k in range(flat.size):
+        ff = flat[k]
+        f_plus = function(ff + step, parameters, *args, **kwargs)
+        f_minus = function(ff - step, parameters, *args, **kwargs)
+        deriv = deriv.at[k].set((f_plus - f_minus) / (2.0 * step))
 
-    flat = freq.ravel()
-    deriv = np.empty(flat.shape, dtype=float)
-    for k, ff in enumerate(flat):
-        f_plus = np.asarray(
-            function(ff + step, parameters, *args, **kwargs), dtype=float
-        )
-        f_minus = np.asarray(
-            function(ff - step, parameters, *args, **kwargs), dtype=float
-        )
-        deriv[k] = (f_plus - f_minus) / (2.0 * step)
-
-    return jnp.asarray(deriv.reshape(freq.shape))
+    return deriv.reshape(frequency.shape)
 
 
 def finite_difference_d2f2(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     step: float = 1e-5,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
     Central finite-difference second derivative with respect to frequency.
+
+    Args:
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
+        frequency: Scalar or array of frequencies.
+        parameters: Parameter vector.
+        *args: Additional positional arguments forwarded to function.
+        step: Central-difference step size.
+        **kwargs: Additional keyword arguments forwarded to function.
+
+    Returns:
+        Array of the same shape as frequency.
     """
-    freq = np.asarray(frequency, dtype=float)
+    if frequency.ndim == 0:
+        f0 = function(frequency, parameters, *args, **kwargs)
+        f_plus = function(frequency + step, parameters, *args, **kwargs)
+        f_minus = function(frequency - step, parameters, *args, **kwargs)
+        return (f_plus - 2.0 * f0 + f_minus) / (step**2)
 
-    if freq.ndim == 0:
-        f0 = np.asarray(function(freq, parameters, *args, **kwargs), dtype=float)
-        f_plus = np.asarray(
-            function(freq + step, parameters, *args, **kwargs), dtype=float
-        )
-        f_minus = np.asarray(
-            function(freq - step, parameters, *args, **kwargs), dtype=float
-        )
-        return jnp.asarray((f_plus - 2.0 * f0 + f_minus) / (step**2))
+    flat = frequency.ravel()
+    deriv2 = jnp.empty(flat.shape, dtype=float)
+    for k in range(flat.size):
+        ff = flat[k]
+        f0 = function(ff, parameters, *args, **kwargs)
+        f_plus = function(ff + step, parameters, *args, **kwargs)
+        f_minus = function(ff - step, parameters, *args, **kwargs)
+        deriv2 = deriv2.at[k].set((f_plus - 2.0 * f0 + f_minus) / (step**2))
 
-    flat = freq.ravel()
-    deriv2 = np.empty(flat.shape, dtype=float)
-    for k, ff in enumerate(flat):
-        f0 = np.asarray(function(ff, parameters, *args, **kwargs), dtype=float)
-        f_plus = np.asarray(
-            function(ff + step, parameters, *args, **kwargs), dtype=float
-        )
-        f_minus = np.asarray(
-            function(ff - step, parameters, *args, **kwargs), dtype=float
-        )
-        deriv2[k] = (f_plus - 2.0 * f0 + f_minus) / (step**2)
-
-    return jnp.asarray(deriv2.reshape(freq.shape))
+    return deriv2.reshape(frequency.shape)
 
 
 def finite_difference_d2f_dtheta(
-    function: IndexedDerivativeFn,
-    frequency: Array,
-    parameters: ArrayLike,
+    function: Callable[..., jax.Array],
+    frequency: jax.Array,
+    parameters: jax.Array,
     *args: Any,
     step_f: float = 1e-5,
     step_theta: float = 1e-6,
     **kwargs: Any,
-) -> Array:
+) -> jax.Array:
     """
     Central finite-difference mixed derivative d/df(d/dtheta).
+
+    Args:
+        function: Callable ``(frequency, parameters, *args, **kwargs) -> jax.Array``.
+        frequency: Scalar or array of frequencies.
+        parameters: Parameter vector.
+        *args: Additional positional arguments forwarded to function.
+        step_f: Central-difference step size in frequency.
+        step_theta: Central-difference step size in parameters, forwarded to
+            :func:`finite_difference_grad_theta`.
+        **kwargs: Additional keyword arguments forwarded to function.
+
+    Returns:
+        Array with the parameter axis appended last: frequency.shape + (npars,).
     """
 
-    def _mixed_at_scalar_freq(ff: float) -> np.ndarray:
-        g_plus = np.asarray(
-            finite_difference_grad_theta(
-                function,
-                ff + step_f,
-                parameters,
-                *args,
-                step=step_theta,
-                **kwargs,
-            ),
-            dtype=float,
+    def _mixed_at_scalar_freq(ff: jax.Array) -> jax.Array:
+        g_plus = finite_difference_grad_theta(
+            function, ff + step_f, parameters, *args, step=step_theta, **kwargs
         )
-        g_minus = np.asarray(
-            finite_difference_grad_theta(
-                function,
-                ff - step_f,
-                parameters,
-                *args,
-                step=step_theta,
-                **kwargs,
-            ),
-            dtype=float,
+        g_minus = finite_difference_grad_theta(
+            function, ff - step_f, parameters, *args, step=step_theta, **kwargs
         )
         return (g_plus - g_minus) / (2.0 * step_f)
 
-    freq = np.asarray(frequency, dtype=float)
+    npars = parameters.size
 
-    if freq.ndim == 0:
-        return jnp.asarray(_mixed_at_scalar_freq(float(freq)))
+    if frequency.ndim == 0:
+        return _mixed_at_scalar_freq(frequency)
 
-    flat = freq.ravel()
-    mixed = np.asarray([_mixed_at_scalar_freq(float(ff)) for ff in flat], dtype=float)
-    return jnp.asarray(mixed.reshape(freq.shape + (np.asarray(parameters).size,)))
+    flat = frequency.ravel()
+    mixed = jnp.empty(flat.shape + (npars,), dtype=float)
+    for k in range(flat.size):
+        mixed = mixed.at[k].set(_mixed_at_scalar_freq(flat[k]))
+
+    return mixed.reshape(frequency.shape + (npars,))
 
 
 def make_log_log_interpolator(
-    freq: AnyArray,
-    compute_fn: Callable[..., AnyArray],
+    freq: jax.Array,
+    compute_fn: Callable[..., jax.Array],
     *args: Any,
     n_points: int = 100,
     method: str = "linear",
-) -> Callable[[AnyArray], Array]:
+) -> Callable[[jax.Array], jax.Array]:
     """
     Pre-compute a log-log interpolator for ``compute_fn`` over [freq_min, freq_max].
 
@@ -349,7 +336,7 @@ def make_log_log_interpolator(
     _log_interp = Interpolator1D(log_xx, jnp.log(safe_yy), method=method, extrap=False)
     _zero_float = zero_mask * 1.0
 
-    def _interpolator(freq: AnyArray) -> Array:
+    def _interpolator(freq: jax.Array) -> jax.Array:
         out_zero = jnp.interp(jnp.log(freq), log_xx, _zero_float) > 0.5
         return jnp.where(out_zero, 0.0, jnp.exp(_log_interp(jnp.log(freq))))
 
@@ -357,11 +344,11 @@ def make_log_log_interpolator(
 
 
 def log_log_interpolate(
-    freq: AnyArray,
-    compute_fn: Callable[..., AnyArray],
+    freq: jax.Array,
+    compute_fn: Callable[..., jax.Array],
     *args: Any,
     n_points: int = 100,
-) -> Array:
+) -> jax.Array:
     """
     Evaluate compute_fn on a coarse log-spaced grid and interpolate in log-log space.
 
