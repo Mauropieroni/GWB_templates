@@ -319,9 +319,7 @@ def _log10_f_br2(
 # ---------------------------------------------------------------------------
 
 
-def _hyp2f1_series(
-    a: ArrayLike, b: ArrayLike, c: ArrayLike, z: jax.Array
-) -> jax.Array:
+def _hyp2f1_series(a: ArrayLike, b: ArrayLike, c: ArrayLike, z: jax.Array) -> jax.Array:
     r"""
     Evaluate the Gauss hypergeometric function with a Taylor series.
 
@@ -352,9 +350,7 @@ def _theta_uv_iso(s0: jax.Array, c_s2: float = _C_S2_RD) -> jax.Array:
     return numerator / denominator
 
 
-def _theta_uv_ad(
-    s0: jax.Array, n_eff: jax.Array, c_s2: float = _C_S2_RD
-) -> jax.Array:
+def _theta_uv_ad(s0: jax.Array, n_eff: jax.Array, c_s2: float = _C_S2_RD) -> jax.Array:
     z = c_s2 * s0**2
     hyp1 = _hyp2f1_series(2.5, -n_eff, 3.5, z)
     hyp2 = _hyp2f1_series(1.5, -n_eff, 2.5, z)
@@ -371,9 +367,7 @@ def _s0_of_f(
     return jnp.clip(2.0 * r - c_s_inv, 0.0, 1.0)
 
 
-def _window_iso(
-    frequency: jax.Array, log_f_uv: jax.Array
-) -> jax.Array:
+def _window_iso(frequency: jax.Array, log_f_uv: jax.Array) -> jax.Array:
     s0 = _s0_of_f(frequency, log_f_uv)
     theta = _theta_uv_iso(s0)
     return theta
@@ -820,9 +814,9 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
                 [log_amp, log_break, 1.0, 11.0 / 3.0, self._bpl_log_transition]
             )
 
-        bpl_parameter_jac = jax.jacfwd(
-            bpl_parameter_map, argnums=tuple(range(6))
-        )(*parameters)
+        bpl_parameter_jac = jax.jacfwd(bpl_parameter_map, argnums=tuple(range(6)))(
+            *parameters
+        )
         bpl_parameter_jac = jnp.stack(bpl_parameter_jac, axis=-1)
         bpl_grad_theta = jnp.einsum("fi,ij->fj", bpl_grad, bpl_parameter_jac)
 
@@ -849,24 +843,22 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
 
         def dbpl_parameter_map(*values: jax.Array) -> jax.Array:
             uv_log = _log10_f_uv(values[0], self._g_star)
-            log_amp, log_break_1, log_break_2, effective_tilt = (
-                self._adiabatic_params(
-                    values[0],
-                    values[1],
-                    values[2],
-                    values[3],
-                    values[4],
-                    values[5],
-                    uv_log,
-                )
+            log_amp, log_break_1, log_break_2, effective_tilt = self._adiabatic_params(
+                values[0],
+                values[1],
+                values[2],
+                values[3],
+                values[4],
+                values[5],
+                uv_log,
             )
             return jnp.array(
                 [log_amp, log_break_2, log_break_1, effective_tilt, 5.0, 1.0, a1, a2]
             )
 
-        dbpl_parameter_jac = jax.jacfwd(
-            dbpl_parameter_map, argnums=tuple(range(6))
-        )(*parameters)
+        dbpl_parameter_jac = jax.jacfwd(dbpl_parameter_map, argnums=tuple(range(6)))(
+            *parameters
+        )
         dbpl_parameter_jac = jnp.stack(dbpl_parameter_jac, axis=-1)
         dbpl_grad_theta = jnp.einsum("fi,ij->fj", dbpl_grad, dbpl_parameter_jac)
 

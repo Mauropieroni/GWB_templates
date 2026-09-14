@@ -61,7 +61,10 @@ class TestDoublePeakEvaporatingPBH(unittest.TestCase):
             + 2.0 * s0 * hyp2f1(0.5, -n_eff, 1.5, z)
         )
 
-        np.testing.assert_allclose(_hyp2f1_series(2.5, -n_eff, 3.5, jnp.asarray(z)), hyp2f1(2.5, -n_eff, 3.5, z))
+        np.testing.assert_allclose(
+            _hyp2f1_series(2.5, -n_eff, 3.5, jnp.asarray(z)),
+            hyp2f1(2.5, -n_eff, 3.5, z),
+        )
         np.testing.assert_allclose(_theta_uv_iso(jnp.asarray(s0)), expected_iso)
         np.testing.assert_allclose(
             _theta_uv_ad(jnp.asarray(s0), jnp.asarray(n_eff)), expected_ad
