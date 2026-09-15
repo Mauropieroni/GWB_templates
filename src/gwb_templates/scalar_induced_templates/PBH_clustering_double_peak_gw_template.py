@@ -100,7 +100,7 @@ class PBH_double_peak_non_Gaussian(AnalyticTemplate):
             ),
         )
 
-    def f_UV(M_PBH: jax.Array) -> jax.Array:
+    def f_UV(self, M_PBH: jax.Array) -> jax.Array:
         return 1.7 * (10**(3.0)) * (M_PBH / (10.**4.0))**(-5.0 / 6.0)
 
     def f_d(self, M_PBH: jax.Array, Omega_f: jax.Array) -> jax.Array:
