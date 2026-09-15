@@ -3,15 +3,15 @@ import unittest
 import jax.numpy as jnp
 
 from gwb_templates import constants as c
-from gwb_templates.scalar_induced_templates.PBH_clustering_double_peak_gw_template import (
-    PBH_double_peak_non_Gaussian,
+from gwb_templates.scalar_induced_templates import (
+    PBH_clustering_double_peak_gw_template as pbh_template,
 )
 from gwb_templates.utils import gradient_autodiff
 
 N_FREQ = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
-model = PBH_double_peak_non_Gaussian()
+model = pbh_template.PBH_double_peak_non_Gaussian()
 # M_PBH [grams], Omega_f, tau_NL
 PARS = jnp.array([1.0e4, 1.0e-10, 1.0e-3])
 
