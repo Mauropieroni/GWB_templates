@@ -66,6 +66,10 @@ from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa
 from gwb_templates.scalar_induced_templates.base import (  # noqa: F401
     ScalarInducedTemplate,
 )
+from gwb_templates.scalar_induced_templates.parity_violation import (  # noqa: F401
+    even_sigw,
+    odd_sigw,
+)
 
 # SIGWAY backend (optional extra: ``pip install gwb_templates[sigway]``; needs a
 # JAX new enough for ``jax.scipy.special.sici``). Import the SIGWAY templates
