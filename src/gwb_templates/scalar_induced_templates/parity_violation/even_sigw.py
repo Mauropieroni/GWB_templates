@@ -15,6 +15,7 @@ from gwb_templates.scalar_induced_templates.parity_violation.helper_functions im
     evaluate_components_jax,
     interpolate_components_jax,
     normalization_factor_gradients_jax,
+    validate_target_n2,
 )
 
 
@@ -95,6 +96,13 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
             "log10_f_NL": {"min": -4.0, "max": 2.0},
             "log10_tau_NL": {"min": -4.0, "max": 4.0},
         }
+        if prior_by_param is not None and "target_n2" in prior_by_param:
+            prior = prior_by_param["target_n2"]
+            if isinstance(prior, Mapping):
+                if "min" in prior:
+                    validate_target_n2(prior["min"])
+                if "max" in prior:
+                    validate_target_n2(prior["max"])
         super().__init__(
             model_name=model_name,
             model_label=(
@@ -115,6 +123,7 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
         log10_f_NL: jax.Array,
         log10_tau_NL: jax.Array,
     ) -> jax.Array:
+        validate_target_n2(target_n2)
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),
             target_f_peak,

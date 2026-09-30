@@ -123,6 +123,27 @@ def _load_archive(path: Path) -> tuple[np.ndarray, ...]:
 FREQUENCY_RANGE = (_LOG_F_GRID[0], _LOG_F_GRID[-1])
 N2_RANGE = (_N2_GRID[0], _N2_GRID[-1])
 
+
+def validate_target_n2(target_n2: float) -> None:
+    """Reject ``n2`` values outside the precomputed archive range."""
+    if isinstance(target_n2, jax.core.Tracer):
+        def check_traced_value(value: jax.Array) -> None:
+            numeric_value = float(value)
+            if not N2_RANGE[0] <= numeric_value <= N2_RANGE[1]:
+                raise ValueError(
+                    "target_n2 is outside the precomputed spectrum range "
+                    f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {numeric_value}"
+                )
+
+        jax.debug.callback(check_traced_value, target_n2)
+        return
+    value = float(np.asarray(target_n2))
+    if not N2_RANGE[0] <= value <= N2_RANGE[1]:
+        raise ValueError(
+            "target_n2 is outside the precomputed spectrum range "
+            f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {value}"
+        )
+
 _JAX_LOG_F_GRID = jnp.asarray(_LOG_F_GRID, dtype=jnp.float64)
 _JAX_N2_GRID = jnp.asarray(_N2_GRID, dtype=jnp.float64)
 _JAX_LOG_VALUES = jnp.asarray(_LOG_VALUES, dtype=jnp.float64)

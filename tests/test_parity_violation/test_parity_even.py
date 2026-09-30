@@ -1,5 +1,6 @@
 import unittest
 
+import jax
 import jax.numpy as jnp
 
 from gwb_templates.scalar_induced_templates.parity_violation.helper_functions import (
@@ -57,6 +58,18 @@ class TestParityEvenTemplate(unittest.TestCase):
     def test_nonnegative(self):
         spectrum = model.omega_gw_h2(fvec, *PARS)
         self.assertTrue(bool(jnp.all(spectrum >= 0.0)))
+
+    def test_n2_outside_precomputed_range_is_rejected(self):
+        with self.assertRaises(ValueError):
+            model.omega_gw_h2(fvec, PARS[0], 1.1, *PARS[2:])
+
+        compiled_model = jax.jit(model.omega_gw_h2)
+        with self.assertRaises(Exception):
+            compiled_model(fvec, PARS[0], 1.1, *PARS[2:])
+
+    def test_custom_n2_prior_outside_precomputed_range_is_rejected(self):
+        with self.assertRaises(ValueError):
+            type(model)(prior_by_param={"target_n2": {"min": 0.0, "max": 1.0}})
 
     def test_scale_parameter_gradients_are_analytical(self):
         components = evaluate_components_jax(

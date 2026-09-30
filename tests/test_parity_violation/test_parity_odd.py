@@ -40,6 +40,10 @@ class TestParityOddTemplate(unittest.TestCase):
         spectrum = model.omega_gw_h2(fvec, *PARS)
         self.assertTrue(bool(jnp.all(spectrum >= 0.0)))
 
+    def test_n2_outside_precomputed_range_is_rejected(self):
+        with self.assertRaises(ValueError):
+            model.omega_gw_h2(fvec, PARS[0], 1.1, *PARS[2:])
+
     def test_scale_parameter_gradients_are_analytical(self):
         components = evaluate_components_jax(
             fvec,
