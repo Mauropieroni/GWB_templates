@@ -21,7 +21,7 @@ from gwb_templates.scalar_induced_templates.parity_violation.helper_functions im
 )
 
 
-class even_sigw(ScalarInducedTemplate, NumericalTemplate):
+class EvenSIGW(ScalarInducedTemplate, NumericalTemplate):
     r"""
     Non-parity-violating SIGW arising from gaussian power spectrum, bispectrum,
     even trispectrum (arxiv:2507.02733,2607.16162).

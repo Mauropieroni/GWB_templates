@@ -201,8 +201,8 @@ All cosmic-string templates inherit from `NumericalTemplate`.
 
 | Class | Parameters | Description |
 | --- | --- | --- |
-| `even_sigw` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
-| `odd_sigw` | `target_f_peak, target_n2, log10_A_zeta, log10_tilde_tau_NL` | Parity-odd contribution from odd trispectrum |
+| `EvenSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
+| `OddSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_tilde_tau_NL` | Parity-odd contribution from odd trispectrum |
 
 ---
 

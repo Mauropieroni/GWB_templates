@@ -9,7 +9,7 @@ from gwb_templates import constants as c
 from gwb_templates.template import get_template_from_registry
 from gwb_templates.utils import gradient_autodiff
 
-model = get_template_from_registry("odd_sigw")
+model = get_template_from_registry("OddSIGW")
 fvec = jnp.geomspace(c.f_min, c.f_max, 100)
 PARS = jnp.array([10.0, 0.5, -2.0, 0.0])
 

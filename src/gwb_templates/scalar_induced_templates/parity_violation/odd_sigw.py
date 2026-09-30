@@ -21,7 +21,7 @@ from gwb_templates.scalar_induced_templates.parity_violation.helper_functions im
 )
 
 
-class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
+class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
     r"""
     Parity-violating SIGW arising from odd trispectrum (arxiv:2507.02733,2607.16162).
     Primordial power spectrum set as broken power law, with IR index equal to 4,
