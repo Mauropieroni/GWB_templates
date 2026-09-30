@@ -197,6 +197,13 @@ All cosmic-string templates inherit from `NumericalTemplate`.
 | `CosmicStringModelII` | `log_Gmu` | Model II — precomputed grid `data/Model-II_BOS-loggrid.dat`, JAX-traceable bilinear interpolation (autodiff backend, jittable) |
 | `AbelianHiggsModelII` | `log_Gmu, logf` | Abelian-Higgs amplitude-scaled wrapper around Model II |
 
+### Scalar-induced gravitational waves
+
+| Class | Parameters | Description |
+| --- | --- | --- |
+| `EvenSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
+| `OddSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_tilde_tau_NL` | Parity-odd contribution from odd trispectrum |
+
 ---
 
 ## Project structure
@@ -211,7 +218,8 @@ src/gwb_templates/
 ├── FOPT_templates/                   # FOPT broken power laws and PT contributions
 ├── inflation_templates/              # Sharp / resonant / double-peak templates
 ├── astrophysical_templates/          # Galactic + extragalactic foregrounds
-└── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
+├── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
+└── scalar_induced_templates/         # SIGWAY and parity-violation templates (with precomputed grids)
 ```
 
 ---

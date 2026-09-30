@@ -4,6 +4,7 @@ extend-select =
 extend-ignore = E203
 exclude =
     .git,
+    .venv,
     __pycache__,
     build,
     dist,
