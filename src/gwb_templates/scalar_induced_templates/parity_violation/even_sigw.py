@@ -152,6 +152,7 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
         target_frequencies = jnp.asarray(frequency, dtype=jnp.float64)
         validate_positive(target_frequencies, "frequency")
         validate_positive(theta[0], "target_f_peak")
+        validate_target_n2(theta[1])
         normalization_factors = normalization_factors_jax(
             theta[2], theta[3], theta[4], 0.0
         ).reshape((4,) + (1,) * target_frequencies.ndim)

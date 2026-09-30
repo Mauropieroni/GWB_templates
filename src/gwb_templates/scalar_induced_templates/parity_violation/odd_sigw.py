@@ -145,6 +145,7 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
         target_frequencies = jnp.asarray(frequency, dtype=jnp.float64)
         validate_positive(target_frequencies, "frequency")
         validate_positive(theta[0], "target_f_peak")
+        validate_target_n2(theta[1])
         normalization_factors = normalization_factors_jax(theta[2], 0.0, 0.0, theta[3])
 
         def shape_only(shape_parameters: jax.Array) -> tuple[jax.Array, jax.Array]:
