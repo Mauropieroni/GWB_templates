@@ -219,7 +219,7 @@ src/gwb_templates/
 ├── inflation_templates/              # Sharp / resonant / double-peak templates
 ├── astrophysical_templates/          # Galactic + extragalactic foregrounds
 ├── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
-└── scalar_induced_templates/         # sigway / Even / Odd SIGW (with data/)
+└── scalar_induced_templates/         # SIGWAY and parity-violation templates (with precomputed grids)
 ```
 
 ---
