@@ -144,6 +144,7 @@ def validate_target_n2(target_n2: float) -> None:
             f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {value}"
         )
 
+
 _JAX_LOG_F_GRID = jnp.asarray(_LOG_F_GRID, dtype=jnp.float64)
 _JAX_N2_GRID = jnp.asarray(_N2_GRID, dtype=jnp.float64)
 _JAX_LOG_VALUES = jnp.asarray(_LOG_VALUES, dtype=jnp.float64)
