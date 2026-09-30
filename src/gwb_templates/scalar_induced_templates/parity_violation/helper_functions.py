@@ -127,6 +127,7 @@ N2_RANGE = (_N2_GRID[0], _N2_GRID[-1])
 def validate_target_n2(target_n2: float) -> None:
     """Reject ``n2`` values outside the precomputed archive range."""
     if isinstance(target_n2, jax.core.Tracer):
+
         def check_traced_value(value: jax.Array) -> None:
             numeric_value = float(value)
             if not N2_RANGE[0] <= numeric_value <= N2_RANGE[1]:
@@ -143,6 +144,22 @@ def validate_target_n2(target_n2: float) -> None:
             "target_n2 is outside the precomputed spectrum range "
             f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {value}"
         )
+
+
+def validate_positive(value: float, name: str) -> None:
+    """Reject non-positive or non-finite values in eager and JIT execution."""
+
+    def check_traced_value(traced_value: jax.Array) -> None:
+        numeric_value = np.asarray(traced_value)
+        if not np.all(np.isfinite(numeric_value) & (numeric_value > 0)):
+            raise ValueError(f"{name} must contain only positive values")
+
+    if isinstance(value, jax.core.Tracer):
+        jax.debug.callback(check_traced_value, value)
+        return
+    numeric_value = np.asarray(value)
+    if not np.all(np.isfinite(numeric_value) & (numeric_value > 0)):
+        raise ValueError(f"{name} must contain only positive values")
 
 
 _JAX_LOG_F_GRID = jnp.asarray(_LOG_F_GRID, dtype=jnp.float64)

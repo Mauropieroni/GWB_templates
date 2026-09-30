@@ -14,7 +14,9 @@ from gwb_templates.template import NumericalTemplate
 from gwb_templates.scalar_induced_templates.parity_violation.helper_functions import (
     evaluate_components_jax,
     interpolate_components_jax,
+    normalization_factors_jax,
     normalization_factor_gradients_jax,
+    validate_positive,
     validate_target_n2,
 )
 
@@ -92,6 +94,13 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
             "log10_A_zeta": {"min": -4.0, "max": 0.0},
             "log10_tilde_tau_NL": {"min": -4.0, "max": 4.0},
         }
+        if prior_by_param is not None and "target_f_peak" in prior_by_param:
+            prior = prior_by_param["target_f_peak"]
+            if isinstance(prior, Mapping):
+                if "min" in prior:
+                    validate_positive(prior["min"], "target_f_peak prior minimum")
+                if "max" in prior:
+                    validate_positive(prior["max"], "target_f_peak prior maximum")
         if prior_by_param is not None and "target_n2" in prior_by_param:
             prior = prior_by_param["target_n2"]
             if isinstance(prior, Mapping):
@@ -101,14 +110,12 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
                     validate_target_n2(prior["max"])
         super().__init__(
             model_name=model_name,
-            model_label=(
-                model_label if model_label is not None
-                else "Parity-odd SIGW"),
-            parameter_labels=(parameter_labels if parameter_labels is not None
-                              else labels),
-            prior_by_param=(prior_by_param if prior_by_param is not None
-                            else priors),
-            )
+            model_label=(model_label if model_label is not None else "Parity-odd SIGW"),
+            parameter_labels=(
+                parameter_labels if parameter_labels is not None else labels
+            ),
+            prior_by_param=(prior_by_param if prior_by_param is not None else priors),
+        )
 
     def omega_gw_h2(
         self,
@@ -118,6 +125,8 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
         log10_A_zeta: jax.Array,
         log10_tilde_tau_NL: jax.Array,
     ) -> jax.Array:
+        validate_positive(frequency, "frequency")
+        validate_positive(target_f_peak, "target_f_peak")
         validate_target_n2(target_n2)
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),
@@ -133,13 +142,21 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
     def _grad_theta_omega_gw_h2_analytical(
         self, frequency: jax.Array, theta: jax.Array, *args: Any, **kwargs: Any
     ) -> jax.Array:
-        autodiff_gradient = jax.jacfwd(self._omega_from_parameter_vector, argnums=1)(
-            frequency, theta, *args, **kwargs
-        )
-        shape_components = interpolate_components_jax(
-            jnp.asarray(frequency, dtype=jnp.float64),
-            theta[0],
-            theta[1],
+        target_frequencies = jnp.asarray(frequency, dtype=jnp.float64)
+        validate_positive(target_frequencies, "frequency")
+        validate_positive(theta[0], "target_f_peak")
+        normalization_factors = normalization_factors_jax(theta[2], 0.0, 0.0, theta[3])
+
+        def shape_only(shape_parameters: jax.Array) -> tuple[jax.Array, jax.Array]:
+            components = interpolate_components_jax(
+                target_frequencies,
+                shape_parameters[0],
+                shape_parameters[1],
+            )
+            return jnp.abs(components[3] * normalization_factors[3]), components
+
+        shape_gradient, shape_components = jax.jacfwd(shape_only, has_aux=True)(
+            theta[:2]
         )
         normalization_gradient = normalization_factor_gradients_jax(
             theta[2], 0.0, 0.0, theta[3]
@@ -151,4 +168,4 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
             ],
             axis=-1,
         )
-        return autodiff_gradient.at[..., 2:].set(scale_gradient)
+        return jnp.concatenate((shape_gradient, scale_gradient), axis=-1)
