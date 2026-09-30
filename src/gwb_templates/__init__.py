@@ -66,10 +66,10 @@ from gwb_templates.cosmic_string_templates import cosmic_string_model_ii  # noqa
 from gwb_templates.scalar_induced_templates.base import (  # noqa: F401
     ScalarInducedTemplate,
 )
-from gwb_templates.scalar_induced_templates.parity_violation.even_sigw import (  # noqa: F401
+from gwb_templates.scalar_induced_templates.parity_violation.even_sigw import (  # noqa: E501, F401
     EvenSIGW,
 )
-from gwb_templates.scalar_induced_templates.parity_violation.odd_sigw import (  # noqa: F401
+from gwb_templates.scalar_induced_templates.parity_violation.odd_sigw import (  # noqa: E501, F401
     OddSIGW,
 )
 
