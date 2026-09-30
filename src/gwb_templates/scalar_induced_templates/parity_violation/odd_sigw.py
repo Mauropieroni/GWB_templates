@@ -50,6 +50,8 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
     month = "7",
     year = "2025"
 },
+ """,
+        r"""
 @article{Caporali:2026qhc,
     author = "Caporali, Ilaria and Ragavendra, H. V. and Ricciardone, Angelo and
     Bartolo, Nicola",
@@ -91,18 +93,22 @@ class odd_sigw(ScalarInducedTemplate, NumericalTemplate):
         }
         super().__init__(
             model_name=model_name,
-            model_label=model_label or "Parity-odd SIGW",
-            parameter_labels=parameter_labels or labels,
-            prior_by_param=prior_by_param or priors,
-        )
+            model_label=(
+                model_label if model_label is not None
+                else "Parity-odd SIGW"),
+            parameter_labels=(parameter_labels if parameter_labels is not None
+                              else labels),
+            prior_by_param=(prior_by_param if prior_by_param is not None
+                            else priors),
+            )
 
     def omega_gw_h2(
         self,
-        frequency: jnp.array,
-        target_f_peak: jnp.array,
-        target_n2: jnp.array,
-        log10_A_zeta: jnp.array,
-        log10_tilde_tau_NL: jnp.array,
+        frequency: jax.Array,
+        target_f_peak: jax.Array,
+        target_n2: jax.Array,
+        log10_A_zeta: jax.Array,
+        log10_tilde_tau_NL: jax.Array,
     ) -> jax.Array:
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),

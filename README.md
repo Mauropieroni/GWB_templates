@@ -201,7 +201,7 @@ All cosmic-string templates inherit from `NumericalTemplate`.
 
 | Class | Parameters | Description |
 | --- | --- | --- |
-| `even_sigw` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL, log10_tilde_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
+| `even_sigw` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
 | `odd_sigw` | `target_f_peak, target_n2, log10_A_zeta, log10_tilde_tau_NL` | Parity-odd contribution from odd trispectrum |
 
 ---
@@ -218,7 +218,7 @@ src/gwb_templates/
 ├── FOPT_templates/                   # FOPT broken power laws and PT contributions
 ├── inflation_templates/              # Sharp / resonant / double-peak templates
 ├── astrophysical_templates/          # Galactic + extragalactic foregrounds
-└── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
+|── cosmic_string_templates/          # Model I / Edf / Eos / II + AbelianHiggs (with data/)
 └── scalar_induced_templates/         # sigway / Even / Odd SIGW (with data/)
 ```
 

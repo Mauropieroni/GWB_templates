@@ -38,8 +38,6 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
         :math:`\log_{10}` of the bispectrum coefficient :math:`f_{NL}`.
     log10_tau_NL
         :math:`\log_{10}` of the even trispectrum coefficient :math:`\tau_{NL}`.
-    log10_tilde_tau_NL
-        :math:`\log_{10}` of the odd trispectrum coefficient.
     """
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
@@ -54,6 +52,8 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
     month = "7",
     year = "2025"
 },
+ """,
+        r"""
 @article{Caporali:2026qhc,
     author = "Caporali, Ilaria and Ragavendra, H. V. and Ricciardone, Angelo and
     Bartolo, Nicola",
@@ -97,10 +97,14 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
         }
         super().__init__(
             model_name=model_name,
-            model_label=model_label or "Parity-even SIGW",
-            parameter_labels=parameter_labels or labels,
-            prior_by_param=prior_by_param or priors,
-        )
+            model_label=(
+                model_label if model_label is not None
+                else "Parity-even SIGW"),
+            parameter_labels=(parameter_labels if parameter_labels is not None
+                              else labels),
+            prior_by_param=(prior_by_param if prior_by_param is not None
+                            else priors),
+            )
 
     def omega_gw_h2(
         self,
@@ -110,7 +114,6 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
         log10_A_zeta: jax.Array,
         log10_f_NL: jax.Array,
         log10_tau_NL: jax.Array,
-        log10_tilde_tau_NL: jax.Array,
     ) -> jax.Array:
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),
@@ -119,7 +122,7 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
             log10_A_zeta,
             log10_f_NL,
             log10_tau_NL,
-            log10_tilde_tau_NL,
+            0.0,
         )
         return jnp.sum(components[:3], axis=0)
 
@@ -135,9 +138,9 @@ class even_sigw(ScalarInducedTemplate, NumericalTemplate):
             theta[1],
         )
         normalization_gradient = normalization_factor_gradients_jax(
-            theta[2], theta[3], theta[4], theta[5]
+            theta[2], theta[3], theta[4], 0.0
         )
         scale_gradient = jnp.einsum(
-            "cf,pc->fp", shape_components[:3], normalization_gradient[:, :3]
+            "c...,pc->...p", shape_components[:3], normalization_gradient[:3, :3]
         )
         return autodiff_gradient.at[..., 2:].set(scale_gradient)

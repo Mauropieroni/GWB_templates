@@ -218,7 +218,7 @@ def interpolate_components_jax(
     Parameters
     ----------
     target_frequencies : jax.Array
-        Positive target frequencies in Hz, with shape ``(n_frequency,)``.
+        Positive target frequencies in Hz, with any shape, including ``()``.
     target_f_peak : float
         Positive peak frequency in Hz used to rescale the archive grid.
     target_n2 : float
@@ -227,9 +227,11 @@ def interpolate_components_jax(
     Returns
     -------
     jax.Array
-        Signed component values with shape ``(4, n_frequency)``. The first
-        axis is ordered as ``(IGW1, IGW2, IGW3, VGW)``.
+        Signed component values with shape ``(4,) + target_frequencies.shape``.
+        The first axis is ordered as ``(IGW1, IGW2, IGW3, VGW)``.
     """
+    original_shape = target_frequencies.shape
+    flat_frequencies = jnp.ravel(target_frequencies)
     log_components = jax.vmap(
         _interpolate_component_jax,
         in_axes=(0, 0, 0, 0, None, None, None),
@@ -238,11 +240,12 @@ def interpolate_components_jax(
         _JAX_IR_SLOPES,
         _JAX_UV_SLOPES,
         _JAX_UV_LOG_VALUES_START,
-        target_frequencies,
+        flat_frequencies,
         target_f_peak,
         target_n2,
     )
-    return _JAX_SIGNS[:, None] * 10.0**log_components
+    components = _JAX_SIGNS[:, None] * 10.0**log_components
+    return components.reshape((components.shape[0],) + original_shape)
 
 
 def normalization_factors_jax(
@@ -318,8 +321,8 @@ def normalization_factor_gradients_jax(
     Returns
     -------
     jax.Array
-        Jacobian with shape ``(4, 4)``. Rows correspond to the four
-        normalization factors and columns to the four logarithmic inputs.
+        Jacobian with shape ``(4, 4)``. Rows correspond to the four logarithmic
+        inputs and columns to the four normalization factors.
     """
     log10_values = jnp.log(10.0)
     factors = normalization_factors_jax(
@@ -359,7 +362,7 @@ def evaluate_components_jax(
     Parameters
     ----------
     target_frequencies : jax.Array
-        Positive target frequencies in Hz, with shape ``(n_frequency,)``.
+        Positive target frequencies in Hz, with any shape, including ``()``.
     target_f_peak : float
         Positive peak frequency in Hz used to rescale the archive grid.
     target_n2 : float
@@ -376,12 +379,13 @@ def evaluate_components_jax(
     Returns
     -------
     jax.Array
-        Normalized component values with shape ``(4, n_frequency)``. The
-        first axis is ordered as ``(IGW1, IGW2, IGW3, VGW)``.
+        Normalized component values with shape ``(4,) + target_frequencies.shape``.
+        The first axis is ordered as ``(IGW1, IGW2, IGW3, VGW)``.
     """
-    return (
-        interpolate_components_jax(target_frequencies, target_f_peak, target_n2)
-        * normalization_factors_jax(
-            log10_A_zeta, log10_f_NL, log10_tau_NL, log10_tilde_tau_NL
-        )[:, None]
+    frequency_axes = (1,) * target_frequencies.ndim
+    normalization_factors = normalization_factors_jax(
+        log10_A_zeta, log10_f_NL, log10_tau_NL, log10_tilde_tau_NL
+    ).reshape((4,) + frequency_axes)
+    return interpolate_components_jax(target_frequencies, target_f_peak, target_n2) * (
+        normalization_factors
     )

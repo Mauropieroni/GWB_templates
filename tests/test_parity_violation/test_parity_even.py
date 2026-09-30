@@ -12,7 +12,7 @@ from gwb_templates.utils import gradient_autodiff
 
 model = get_template_from_registry("even_sigw")
 fvec = jnp.geomspace(c.f_min, c.f_max, 100)
-PARS = jnp.array([10.0, 0.5, -2.0, 0.0, 0.0, 0.0])
+PARS = jnp.array([10.0, 0.5, -2.0, 0.0, 0.0])
 
 
 class TestParityEvenTemplate(unittest.TestCase):
@@ -24,6 +24,18 @@ class TestParityEvenTemplate(unittest.TestCase):
     def test_shape(self):
         spectrum = model.omega_gw_h2(fvec, *PARS)
         self.assertEqual(spectrum.shape, fvec.shape)
+
+    def test_parameter_names(self):
+        self.assertEqual(
+            model.parameter_names,
+            (
+                "target_f_peak",
+                "target_n2",
+                "log10_A_zeta",
+                "log10_f_NL",
+                "log10_tau_NL",
+            ),
+        )
 
     def test_gradient_shape(self):
         gradient = model.grad_theta_omega_gw_h2(fvec, PARS)
@@ -54,7 +66,7 @@ class TestParityEvenTemplate(unittest.TestCase):
             PARS[2],
             PARS[3],
             PARS[4],
-            PARS[5],
+            0.0,
         )
         gradient = model.grad_theta_omega_gw_h2(fvec, PARS)
         log10 = jnp.log(10.0)
@@ -65,7 +77,6 @@ class TestParityEvenTemplate(unittest.TestCase):
                 * (2.0 * components[0] + 3.0 * components[1] + 3.0 * components[2]),
                 log10 * 2.0 * components[1],
                 log10 * components[2],
-                jnp.zeros_like(fvec),
             ],
             axis=-1,
         )
