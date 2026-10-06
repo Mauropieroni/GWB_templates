@@ -85,77 +85,6 @@ mixed = model.d2_df_dtheta_omega_gw_h2(freq, theta)
 
 ---
 
-## Axion inflation with a Matérn spectrum
-
-`AxionInflationU1Matern52` is a separate template; `AxionInflationU1` retains
-its bilinear interpolation and default data.
-
-```python
-import jax.numpy as jnp
-from gwb_templates import get_template_from_registry
-
-freq = jnp.geomspace(1e-4, 1e-1, 100)  # Hz
-
-# Packaged LISA–ET study data, with independent uniform priors over its axes.
-model = get_template_from_registry("AxionInflationU1Matern52")
-
-# Or load your own fitted model, with analysis-specific threshold and priors.
-custom = get_template_from_registry(
-    "AxionInflationU1Matern52",
-    data_file="my_scan.npz",
-    ratio_threshold=0.1,
-    prior_by_param={
-        "inv_f_tilde": {"min": 60.0, "max": 80.0},
-        "abs_vprime": {"min": 0.12, "max": 0.15},
-    },
-)
-omega = custom.omega_gw_h2(freq, 70.0, 0.13)  # Omega_GW h^2
-valid = custom.is_valid(70.0, 0.13)           # Apply this cut in your analysis.
-
-# Optional analysis-setup step, not part of spectrum evaluation.
-correction = custom.compute_evidence_correction()
-# Also exposes valid_prior_mass, valid_prior_mass_error, reference_prior_bounds,
-# and log_evidence_correction; these are None until the calculation is requested.
-```
-
-The NPZ contains only numerical inputs; no companion JSON is required.
-The same two parameter meanings are assumed, but ranges, grid sizes,
-frequency bins and the number of centers can vary. A raw scan must first be fitted
-upstream to produce the coefficients. All ratio histories must be aligned to the
-same ordered time samples across grid nodes. The loader checks dimensions, finite
-real values, increasing axes and positive scales; it cannot check physical alignment.
-Additional NPZ fields are ignored, and loading never enables pickle.
-
-| NPZ arrays | Shape and meaning |
-| --- | --- |
-| `inv_f_tilde`, `abs_vprime` | Parameter axes, lengths `n_inv`, `n_abs` (at least 2 each) |
-| `log10_frequency_hz` | Increasing log10 frequency axis, length `n_freq >= 1`; used without conversion |
-| `centers` | Physical parameter coordinates, `(n_centers, 2)` in the order above |
-| `parameter_offset`, `parameter_scale` | `(2,)` each; normalized coordinate `z = (theta - offset) / scale` |
-| `length_scale` | `(2,)`; anisotropic lengths in normalized coordinates |
-| `weights`, `trend_coefficients` | `(n_centers, n_freq)` and `(3, n_freq)`; RBF weights and coefficients of `[1, z[0], z[1]]` in log10 Omega_GW h² |
-| `ratio_grad_over_kin` | `(n_abs, n_inv, n_history)`; aligned full gradient/kinetic energy-ratio histories |
-| `sampled_node` | `(n_abs, n_inv)` boolean or numeric 0/1 mask |
-
-The kernel is `(1 + sqrt(5)*r + 5*r*r/3) * exp(-sqrt(5)*r)`, with
-`r = norm((z - z_center) / length_scale)`. Log spectra are interpolated linearly
-in log frequency, and the spectrum is zero outside the stored band. Use `jax.vmap`
-for parameter batches. The packaged development scan has missing nodes: validity
-requires all four cell corners to be sampled and the maximum of the interpolated
-full ratio history to be strictly below `ratio_threshold`. Finite, clipped spectrum
-evaluation at invalid parameters does not make those parameters valid.
-
-Evidence normalization is supported for independent uniform `min`/`max` priors.
-It integrates the validity predicate over the configured rectangle, including any
-out-of-grid area as invalid. The numerical error estimate does not describe physical
-or interpolation uncertainty. Recompute if priors change. Add `-log(valid_prior_mass)`
-only to evidence computed with a rectangular prior and a hard validity cut, to obtain
-evidence for the prior conditioned on validity. Do not apply it again when inference
-already uses that normalized conditional prior. Other prior families need their own
-normalization; they can still be used for spectrum evaluation.
-
----
-
 ## Writing a new template
 
 ```python
@@ -228,6 +157,7 @@ All templates listed below are class names (also their registry keys). The full 
 
 | Class | Parameters | Description |
 | --- | --- | --- |
+| `AxionU1LinearSlope` | `inv_f_tilde, abs_vprime` | U(1) axion linear-slope family (arXiv:2303.13425); Matérn-5/2 by default, optional bilinear |
 | `DoublePeak` | `log_amplitude, log_pivot, beta, k1, k2, rho, gamma` | Double log-normal peak |
 | `DoublePeakSharp` | 10 params | `DoublePeak` envelope × sharp-feature modulation |
 | `DoublePeakSharpLog` | 10 params | `DoublePeakSharp` with log-parametrized sharp triple |

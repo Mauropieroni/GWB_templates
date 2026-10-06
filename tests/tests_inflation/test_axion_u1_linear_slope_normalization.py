@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from gwb_templates.inflation_templates._axion_validity import _valid_prior_mass
+from gwb_templates.inflation_templates.axion_u1_linear_slope import _valid_prior_mass
 
 
 def _unit_square_mass(ratios, threshold, bounds=((0.0, 1.0), (0.0, 1.0))):
