@@ -157,6 +157,7 @@ All templates listed below are class names (also their registry keys). The full 
 
 | Class | Parameters | Description |
 | --- | --- | --- |
+| `AxionU1LinearSlope` | `inv_f_tilde, abs_vprime` | U(1) axion linear-slope family (arXiv:2303.13425); Matérn-5/2 by default, optional bilinear |
 | `DoublePeak` | `log_amplitude, log_pivot, beta, k1, k2, rho, gamma` | Double log-normal peak |
 | `DoublePeakSharp` | 10 params | `DoublePeak` envelope × sharp-feature modulation |
 | `DoublePeakSharpLog` | 10 params | `DoublePeakSharp` with log-parametrized sharp triple |
