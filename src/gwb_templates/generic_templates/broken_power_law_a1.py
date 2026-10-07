@@ -7,11 +7,11 @@ physical interpretation:
 
 .. math::
 
-    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha}\,
+    \Omega_{\mathrm{GW}} h^2(f) = \Omega_b h^2\,
         x^{n_1}\,
         \left(\tfrac{1}{2} + \tfrac{1}{2} x^{a_1}\right)^{(n_2 - n_1)/a_1}
 
-with :math:`x = f / f_b`.
+with :math:`x = f / f_b` and :math:`\Omega_{\mathrm{GW}} h^2(f_b) = \Omega_b h^2`.
 
 Reference: arXiv:2403.03723.
 """
@@ -79,7 +79,7 @@ class BrokenPowerLawA1(AnalyticTemplate):
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
         default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+            "log_amplitude": r"$\log_{10}(h^2\,\Omega_b)$",
             "log_f_b": r"$\log_{10}(f_b/\mathrm{Hz})$",
             "n_1": r"$n_1$",
             "n_2": r"$n_2$",

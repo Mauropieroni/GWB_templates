@@ -9,8 +9,10 @@ from gwb_templates.template import get_template_from_registry
 N_FREQ = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
+# amp_prefactor, n1, n2, n3, a1, a2
+HYPERPARS = jnp.array([0.11, 3.0, 1.0, -3.0, 2.0, 4.0])
 # New registry API
-model = get_template_from_registry("PtSoundWaves")
+model = get_template_from_registry("PtSoundWaves", *HYPERPARS)
 # log_K, log_R_H_star, xi_w, log_T_star
 # xi_w = 0.7 (detonation regime, away from c_s ~ 0.577)
 PARS = jnp.array([-1.0, -1.0, 0.7, 2.0])

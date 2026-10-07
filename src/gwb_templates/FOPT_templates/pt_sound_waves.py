@@ -50,14 +50,35 @@ class PtSoundWaves(AnalyticTemplate):
         Bubble wall velocity.
     log_T_star
         :math:`\log_{10}` of the transition temperature (in GeV).
+
+    Configuration
+    -------------
+    amplitude_prefactor
+        Numerical factor in the amplitude. Defaults to
+        `PtSoundWaves.DEFAULT_AMPLITUDE_PREFACTOR`.
+    spectral_index_low_f
+        Low-frequency spectral index. Defaults to
+        `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[0]`.
+    spectral_index_mid_f
+        Intermediate-frequency spectral index. Defaults to
+        `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[1]`.
+    spectral_index_high_f
+        High-frequency spectral index. Defaults to
+        `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[2]`.
+    transition_smoothness_low_f
+        Smoothness of the transition between the low and intermediate frequency
+        spectral slopes. Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[3]`.
+    transition_smoothness_high_f
+        Smoothness of the transition between the intermediate and high frequency
+        spectral slopes. Defaults to `PtSoundWaves.DEFAULT_SPECTRAL_EXPONENTS[4]`.
     """
 
-    #: Spectral-shape amplitude prefactor (Jinno et al. 2023).
-    AMPLITUDE_PREFACTOR: ClassVar[float] = 0.11
+    #: Default spectral amplitude prefactor (Jinno et al. 2023).
+    DEFAULT_AMPLITUDE_PREFACTOR: ClassVar[float] = 0.11
     #: Sound speed in the relativistic plasma (1/sqrt(3)).
     SOUND_SPEED: ClassVar[float] = 0.5773502691896258
-    #: Fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
-    SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
+    #: Default values for fixed spectral exponents (n_1, n_2, n_3, a_1, a_2).
+    DEFAULT_SPECTRAL_EXPONENTS: ClassVar[tuple[float, float, float, float, float]] = (
         3.0,
         1.0,
         -3.0,
@@ -122,12 +143,27 @@ class PtSoundWaves(AnalyticTemplate):
 
     def __init__(
         self,
+        amplitude_prefactor: float = DEFAULT_AMPLITUDE_PREFACTOR,
+        spectral_index_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[0],
+        spectral_index_mid_f: float = DEFAULT_SPECTRAL_EXPONENTS[1],
+        spectral_index_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[2],
+        transition_smoothness_low_f: float = DEFAULT_SPECTRAL_EXPONENTS[3],
+        transition_smoothness_high_f: float = DEFAULT_SPECTRAL_EXPONENTS[4],
         *,
         model_name: str | None = None,
         model_label: str | None = None,
         parameter_labels: Mapping[str, str] | None = None,
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
+        self.amplitude_prefactor: float = float(amplitude_prefactor)
+        self.spectral_exponents: tuple[float, float, float, float, float] = (
+            float(spectral_index_low_f),
+            float(spectral_index_mid_f),
+            float(spectral_index_high_f),
+            float(transition_smoothness_low_f),
+            float(transition_smoothness_high_f),
+        )
+
         default_labels = {
             "log_K": r"$\log_{10}K$",
             "log_R_H_star": r"$\log_{10}(R_* H_*)$",
@@ -179,9 +215,9 @@ class PtSoundWaves(AnalyticTemplate):
         r_f = 2.5 * xi_bubble / xi_shell
         norm = (jnp.sqrt(2.0) + 2.0 * r_f / (1.0 + r_f**2)) / jnp.pi
 
-        h2Omega2 = norm * h2FGW0 * self.AMPLITUDE_PREFACTOR * K**2 * H_tau * R_H_star
+        h2Omega2 = norm * h2FGW0 * self.amplitude_prefactor * K**2 * H_tau * R_H_star
 
-        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        n_1, n_2, n_3, a_1, a_2 = self.spectral_exponents
         return double_broken_power_law(
             frequency,
             jnp.log10(h2Omega2),
@@ -232,10 +268,10 @@ class PtSoundWaves(AnalyticTemplate):
         r_f = 2.5 * xi_bubble / xi_shell
         norm = (jnp.sqrt(2.0) + 2.0 * r_f / (1.0 + r_f**2)) / jnp.pi
         h2Omega2 = (
-            norm * h2FGW0 * self.AMPLITUDE_PREFACTOR * K**2 * H_tau * R_H_star
+            norm * h2FGW0 * self.amplitude_prefactor * K**2 * H_tau * R_H_star
         )
 
-        n_1, n_2, n_3, a_1, a_2 = self.SPECTRAL_EXPONENTS
+        n_1, n_2, n_3, a_1, a_2 = self.spectral_exponents
         J_inner = jac_double_broken_power_law_amp_freqs(
             frequency,
             jnp.log10(h2Omega2),
