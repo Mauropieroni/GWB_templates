@@ -136,10 +136,11 @@ class CosmicStringModelIII(NumericalTemplate):
         """
         self.data_filename: str = str(data_filename)
 
-        # setup() will populate these; we need them after super().__init__
-        # to be able to read the grid extrema for defaulting priors. So we
-        # load the grid once eagerly here just to peek at the gmu range.
-        gmu_axis, _, _ = _load_grid(self.data_filename)
+        # We need the grid extrema for defaulting priors before calling
+        # super().__init__ (which triggers setup()). Load it once here and
+        # stash it so setup() can reuse it instead of re-reading the file.
+        self._loaded_grid = _load_grid(self.data_filename)
+        gmu_axis, _, _ = self._loaded_grid
         log_gmu_min = float(gmu_axis[0])
         log_gmu_max = float(gmu_axis[-1])
 
@@ -161,7 +162,8 @@ class CosmicStringModelIII(NumericalTemplate):
 
     def setup(self) -> None:
         """Load the precomputed (log_Gmu, log10_f) grid into JAX arrays."""
-        gmu_axis, freq_axis, log10_omega = _load_grid(self.data_filename)
+        gmu_axis, freq_axis, log10_omega = self._loaded_grid
+        del self._loaded_grid
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
