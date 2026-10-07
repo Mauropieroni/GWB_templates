@@ -9,8 +9,10 @@ from gwb_templates.template import get_template_from_registry
 N_FREQ = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
+# amp_prefactor, n1, n2, n3, a1, a2
+HYPERPARS = jnp.array([0.085, 3.0, 1.0, -8.0, 4.0, 2.15])
 # New registry API
-model = get_template_from_registry("PtTurbulence")
+model = get_template_from_registry("PtTurbulence", *HYPERPARS)
 # log_Omega_s, log_R_H_star, log_T_star
 PARS = jnp.array([-2.0, -1.0, 2.0])
 

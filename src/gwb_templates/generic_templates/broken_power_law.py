@@ -5,7 +5,7 @@ General-purpose 5-parameter smooth BPL:
 
 .. math::
 
-    \Omega_{\mathrm{GW}} h^2(f) = 10^{\alpha}\,
+    \Omega_{\mathrm{GW}} h^2(f) = \Omega_* h^2\,
         \frac{x^{n_1}}{\left(\tfrac{1}{2}(1 + x^{1/\delta})\right)^{(n_1 - n_2)\delta}}
 
 with :math:`x = f / f_*` and :math:`\delta = 10^{\log_{10}\delta}`. At low

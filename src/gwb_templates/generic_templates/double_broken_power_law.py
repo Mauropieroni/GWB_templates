@@ -8,13 +8,13 @@ frequency :math:`f_2` for stable normalisation:
 
 .. math::
 
-    \Omega_{\mathrm{GW}} h^2(f) = N \cdot 10^{\alpha}\,
+    \Omega_{\mathrm{GW}} h^2(f) = N \cdot \Omega_* h^2\,
         (f/f_1)^{n_1}\,
         (1 + (f/f_1)^{a_1})^{(n_2 - n_1)/a_1}\,
         (1 + (f/f_2)^{a_2})^{(n_3 - n_2)/a_2}
 
 where :math:`N` normalises the spectrum so that
-:math:`\Omega_{\mathrm{GW}} h^2(f_2) = 10^{\alpha}`.
+:math:`\Omega_{\mathrm{GW}} h^2(f_2) = \Omega_* h^2`.
 
 Reference: arXiv:2403.03723.
 """

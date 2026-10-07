@@ -9,8 +9,13 @@ from gwb_templates.template import get_template_from_registry
 N_FREQ = 100
 fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
+# amp_prefactor_sw, n1_sw, n2_sw, n3_sw, a1_sw, a2_sw,
+#    amp_prefactor_turb, n1_turb, n2_turb, n3_turb, a1_turb, a2_turb,
+HYPERPARS = jnp.array([
+    0.11, 3.0, 1.0, -3.0, 2.0, 4.0, 0.085, 3.0, 1.0, -8.0, 4.0, 2.15
+])
 # New registry API
-model = get_template_from_registry("PtPlasma")
+model = get_template_from_registry("PtPlasma", *HYPERPARS)
 # log_K, log_R_H_star, xi_w, log_T_star, epsilon
 # xi_w = 0.7 (detonation regime, away from c_s ~ 0.577)
 PARS = jnp.array([-1.0, -1.0, 0.7, 2.0, 0.05])

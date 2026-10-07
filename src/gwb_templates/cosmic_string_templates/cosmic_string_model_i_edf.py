@@ -2,7 +2,7 @@
 Cosmic String Model I with Extra Degrees of Freedom (EDF) template (5 parameters).
 
 Extends :class:`CosmicStringModelI` by allowing an additional BSM particle species to
-become relativistic at temperature ``T_Extra``, which modifies the effective degrees
+become relativistic at temperature ``T_Extra_GeV``, which modifies the effective degrees
 of freedom and hence the GW spectrum.
 
 Reference: arXiv:2405.03740, Section 4.
@@ -46,17 +46,10 @@ Delta1_gr, Delta2_gr, Delta3_gr, Delta4_gr = (
     _Delta_gr[3],
 )
 
-_T_EXTRA_MIN = 0.005  # GeV
-# CMB temperature today in eV (ct.T0_CMB_GeV is in GeV; T_Extra_eff below is in
-# eV too, so T_star must match or the comparison picks the wrong DOF branch).
-_T0_CMB_eV = ct.T0_CMB_GeV * 1e9
-# Effective DOF for entropy/energy density at low temperature today, used to
-# build the g0in normalization below (not ct.g_star_0, the *current* count).
-_GSTAR_LOW_T = 3.36
-_G_ENTROPY_LOW_T = 3.91
+_T_EXTRA_MIN_GeV = 0.005  # GeV
 # Normalization for the extra-DOF step rescaling (Eq. after A.19 of 2405.03740):
 # g0in = (g_entropy_low_T^(4/3) / gstar_low_T)^3.
-_G0IN = (_G_ENTROPY_LOW_T ** (4.0 / 3.0) / _GSTAR_LOW_T) ** 3.0
+_G0IN = (ct.g_entropy_0 ** (4.0 / 3.0) / ct.g_star_0) ** 3.0
 
 
 # ── Extra-DOF helpers ─────────────────────────────────────────────────────────
@@ -70,27 +63,27 @@ def _delta_gr_from_delta(
 
 
 def _get_Delta_gr_extra(
-    Gmu: jax.Array, alpha: jax.Array, T_Extra: jax.Array, Dg_Extra: jax.Array
+    Gmu: jax.Array, alpha: jax.Array, T_Extra_Gev: jax.Array, Dg_Extra: jax.Array
 ) -> tuple[jax.Array, jax.Array]:
     """Compute modified DOF ratios and scale factors with an extra BSM species.
 
-    T_Extra is expected to already satisfy T_Extra >= _T_EXTRA_MIN (the prior's
-    log_T_Extra range keeps it well above); not re-checked here, since a jax-traced
-    value can't drive a Python ``if ...: raise`` under jit.
+    T_Extra_Gev is expected to already satisfy T_Extra_Gev >= _T_EXTRA_MIN_GeV (the
+    prior's log_T_Extra_GeV range keeps it well above); not re-checked here, since a
+    jax-traced value can't drive a Python ``if ...: raise`` under jit.
 
-    Finds where T_Extra falls among the 4 existing SM dof-transition steps and inserts
-    a new step there, rescaling every step before it via _delta_gr_from_delta.
+    Finds where T_Extra_Gev falls among the 4 existing SM dof-transition steps and
+    inserts a new step there, rescaling every step before it via _delta_gr_from_delta.
     jnp.searchsorted replaces the Python linear search with an early ``break`` (not
     expressible under jit -- the loop bound would be data-dependent), and the mask-based
     jnp.where replaces a ``for j in range(flag)`` loop for the same reason.
 
-    One corner deliberately not reproduced: the original also special-cased T_Extra_eff
-    landing on *exactly* one of the 4 step temperatures, skipping the insertion -- which
-    changes the output length depending on that equality, incompatible with jit's static
-    shapes, and needs an exact float64 tie between independently-derived quantities
-    (probability 0 for any continuous sampler).
+    One corner deliberately not reproduced: the original also special-cased
+    T_Extra_eff_GeV landing on *exactly* one of the 4 step temperatures, skipping the
+    insertion -- which changes the output length depending on that equality,
+    incompatible with jit's static shapes, and needs an exact float64 tie between
+    independently-derived quantities (probability 0 for any continuous sampler).
     """
-    T_Extra_eff = T_Extra * 1e9 / (1.0 + _get_epsilon_r(Gmu, alpha)) ** 0.5
+    T_Extra_eff_GeV = T_Extra_Gev * 1e9 / (1.0 + _get_epsilon_r(Gmu, alpha)) ** 0.5
 
     g0 = jnp.where(
         Dg_Extra == 0,
@@ -101,31 +94,31 @@ def _get_Delta_gr_extra(
     nsm = len(_Delta_gr)
     T_star = jnp.array(
         [
-            _T0_CMB_eV * _a0 * _Delta_gr[i] / _get_an_star(Gmu, alpha, i)
+            ct.T0_CMB_eV * _a0 * _Delta_gr[i] / _get_an_star(Gmu, alpha, i)
             for i in range(nsm)
         ]
     )
 
     # T_star decreases with step index; searching the ascending reversal for
-    # where T_Extra_eff sits reproduces the original's "walk backwards, stop
+    # where T_Extra_eff_GeV sits reproduces the original's "walk backwards, stop
     # at the first T_star it's smaller than" search as one vectorized op.
-    i = jnp.searchsorted(T_star[::-1], T_Extra_eff, side="right")
+    i = jnp.searchsorted(T_star[::-1], T_Extra_eff_GeV, side="right")
     flag = nsm - i
 
-    T_star = jnp.insert(T_star, flag, T_Extra_eff)
+    T_star = jnp.insert(T_star, flag, T_Extra_eff_GeV)
     Delta_gr_extra = jnp.insert(_Delta_gr, flag, _Delta_gr[jnp.maximum(flag - 1, 0)])
 
     corrected = _delta_gr_from_delta(g0, Dg_Extra, Delta_gr_extra)
     Delta_gr_extra = jnp.where(jnp.arange(nsm + 1) < flag, corrected, Delta_gr_extra)
 
-    a_star_dof = _a0 * jnp.append(Delta_gr_extra * _T0_CMB_eV / T_star, ct.a_eq)
+    a_star_dof = _a0 * jnp.append(Delta_gr_extra * ct.T0_CMB_eV / T_star, ct.a_eq)
     return Delta_gr_extra, a_star_dof
 
 
 def _get_A_n_extra(
     f_eV: jax.Array, Gmu: jax.Array, a_star_dof: jax.Array, epoch: int
 ) -> jax.Array:
-    """Integration bound Script-A_n with EDF scale factors (Eq. A.19)."""
+    """Integration bound Script-A_n with EDF scale factors (after Eq. A.19)."""
     D_r = _get_D(_nu_r, ct.Omega_R, Gmu)
     a_star_n = a_star_dof[epoch] / _a0
     return (D_r / a_star_n) / f_eV
@@ -136,7 +129,7 @@ def _Omega_r_dof_edf(
     Gmu: jax.Array,
     alpha: jax.Array,
     q: jax.Array,
-    T_Extra: jax.Array,
+    T_Extra_GeV: jax.Array,
     Dg_Extra: jax.Array,
     N: jax.Array,
 ) -> jax.Array:
@@ -146,7 +139,7 @@ def _Omega_r_dof_edf(
     than an unrolled Python loop: same arithmetic, far fewer XLA ops.
     """
     Cr = _get_C_r_no_dof(Gmu, alpha) / jsc.zeta(q, 1.0)
-    Delta_gr_extra, a_star_dof = _get_Delta_gr_extra(Gmu, alpha, T_Extra, Dg_Extra)
+    Delta_gr_extra, a_star_dof = _get_Delta_gr_extra(Gmu, alpha, T_Extra_GeV, Dg_Extra)
     A_all = jnp.stack(
         [
             _get_A_n_extra(f_eV, Gmu, a_star_dof, i)
@@ -167,7 +160,7 @@ def _compute_spectrum_edf(
     log_Gmu: jax.Array,
     log_alpha: jax.Array,
     q: jax.Array,
-    log_T_Extra: jax.Array,
+    log_T_Extra_GeV: jax.Array,
     Dg_Extra: jax.Array,
 ) -> jax.Array:
     """Evaluate h^2 * Omega_GW(freq) for the EDF variant."""
@@ -175,7 +168,7 @@ def _compute_spectrum_edf(
     f_eV = freq * ct.h_bar_eV_s
     Gmu = 10.0**log_Gmu
     alpha = 10.0**log_alpha
-    T_Extra = 10.0**log_T_Extra
+    T_Extra_GeV = 10.0**log_T_Extra_GeV
 
     f_min_r = _get_f_min_r(Gmu, alpha)
     f_min_m = _get_f_min_m(Gmu, alpha)
@@ -186,7 +179,7 @@ def _compute_spectrum_edf(
     def large_alpha_branch(_: None) -> jax.Array:
         omega_r = jnp.where(
             f_eV >= f_min_r,
-            _Omega_r_dof_edf(f_eV, Gmu, alpha, q, T_Extra, Dg_Extra, N_r),
+            _Omega_r_dof_edf(f_eV, Gmu, alpha, q, T_Extra_GeV, Dg_Extra, N_r),
             0.0,
         )
         omega_rm = jnp.where(f_eV >= f_min_m, _Omega_rm(f_eV, Gmu, alpha, q, N_m), 0.0)
@@ -227,7 +220,7 @@ class CosmicStringModelIEdf(AnalyticTemplate):
         :math:`\log_{10}` of the loop-size parameter :math:`\alpha`.
     q
         Harmonic power-law index.
-    log_T_Extra
+    log_T_Extra_GeV
         :math:`\log_{10}` of the BSM transition temperature in GeV.
     Dg_Extra
         Number of extra effective degrees of freedom contributed by the
@@ -271,16 +264,22 @@ class CosmicStringModelIEdf(AnalyticTemplate):
             "log_Gmu": r"$\log_{10}(G\mu)$",
             "log_alpha": r"$\log_{10}\alpha$",
             "q": r"$q$",
-            "log_T_Extra": r"$\log_{10}(T_\Delta/\mathrm{GeV})$",
+            "log_T_Extra_GeV": r"$\log_{10}(T_\Delta/\mathrm{GeV})$",
             "Dg_Extra": r"$\Delta g$",
         }
         default_priors = {
             "log_Gmu": {"min": -12.0, "max": -6.0},
             "log_alpha": {"min": -3.0, "max": 0.0},
             "q": {"min": 1.01, "max": 2.0},
-            "log_T_Extra": {"min": -2.0, "max": 5.0},
+            "log_T_Extra_GeV": {"min": -2.0, "max": 5.0},
             "Dg_Extra": {"min": 0.0, "max": 200.0},
         }
+
+        if default_priors["log_T_Extra_GeV"]["min"] < jnp.log10(_T_EXTRA_MIN_GeV):
+            raise ValueError(
+                f"Prior for log_T_Extra_GeV must be >= {jnp.log10(_T_EXTRA_MIN_GeV)} "
+                f"to avoid unphysical T_Extra_GeV < {_T_EXTRA_MIN_GeV} GeV."
+            )
 
         super().__init__(
             model_name=model_name,
@@ -303,7 +302,7 @@ class CosmicStringModelIEdf(AnalyticTemplate):
         log_Gmu: jax.Array,
         log_alpha: jax.Array,
         q: jax.Array,
-        log_T_Extra: jax.Array,
+        log_T_Extra_GeV: jax.Array,
         Dg_Extra: jax.Array,
     ) -> jax.Array:
         return log_log_interpolate(
@@ -312,7 +311,7 @@ class CosmicStringModelIEdf(AnalyticTemplate):
             log_Gmu,
             log_alpha,
             q,
-            log_T_Extra,
+            log_T_Extra_GeV,
             Dg_Extra,
             n_points=self.n_interp_points,
         )
