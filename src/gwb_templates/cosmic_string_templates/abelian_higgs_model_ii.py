@@ -116,8 +116,10 @@ class AbelianHiggsModelII(NumericalTemplate):
         self.data_filename: str = str(data_filename)
 
         gmu_axis, _, _ = _load_grid(self.data_filename)
-        log_gmu_min = float(gmu_axis[0])
-        log_gmu_max = float(gmu_axis[-1])
+        # gmu_axis may be stored ascending or descending depending on the data
+        # file, so don't assume axis[0]/axis[-1] are the min/max.
+        log_gmu_min = float(jnp.min(gmu_axis))
+        log_gmu_max = float(jnp.max(gmu_axis))
 
         default_labels = {
             "log_Gmu": r"$\log_{10}(G\mu)$",

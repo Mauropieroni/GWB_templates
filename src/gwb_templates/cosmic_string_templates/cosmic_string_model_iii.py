@@ -15,18 +15,16 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 import numpy as np
 
 from gwb_templates.template import NumericalTemplate
-from gwb_templates.utils import bilinear_interp as _bilinear_interp
+from gwb_templates.utils import bilinear_dS_dix as _bilinear_dS_dix
+from gwb_templates.utils import bilinear_eval as _bilinear_eval
 from gwb_templates.utils import to_frac_ix as _to_frac_ix
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 _DEFAULT_DATA_FILENAME = "Model-III_LRS-loggrid.dat"
 _DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -170,11 +168,32 @@ class CosmicStringModelIII(NumericalTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Gmu: ArrayLike,
+        frequency: jax.Array,
+        log_Gmu: jax.Array,
     ) -> jax.Array:
         r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model III."""
         log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        return 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)
+        return 10.0 ** _bilinear_eval(ix, iy, self.log10_omega)
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
+        log_Gmu = theta[0]
+        log10_f = jnp.log10(frequency)
+        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
+        iy = _to_frac_ix(log10_f, self.freq_axis)
+
+        S = _bilinear_eval(ix, iy, self.log10_omega)
+        h2_omega = 10.0**S
+
+        n_gmu = self.gmu_axis.shape[0]
+        d_ix_d_log_Gmu = (n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(ix, iy, self.log10_omega)
+
+        grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
+        return grad[..., None]
