@@ -72,6 +72,7 @@ from gwb_templates.cosmic_string_templates import (  # noqa: F401
 from gwb_templates.scalar_induced_templates.base import (  # noqa: F401
     ScalarInducedTemplate,
 )
+from gwb_templates.scalar_induced_templates import broken_plateau  # noqa: F401
 
 # SIGWAY backend (optional extra: ``pip install gwb_templates[sigway]``; needs a
 # JAX new enough for ``jax.scipy.special.sici``). Import the SIGWAY templates
