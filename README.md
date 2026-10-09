@@ -81,15 +81,15 @@ mixed = model.d2_df_dtheta_omega_gw_h2(freq, theta)
 | Member                                                                     | Description                                                                                                                                                                    |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `omega_gw_h2(freq, *params, **cfg)`                                      | Direct call with parameters spread positionally. Subclasses implement this.                                                                                                    |
-| `omega_gw_h2_from_parameters(freq, theta)`                               | Public entry point; accepts a parameter vector or`{name: value}` mapping.                                                                                                    |
+| `omega_gw_h2_from_parameters(freq, theta)`                               | Public entry point; accepts a parameter vector or `{name: value}` mapping.                                                                                                    |
 | `grad_theta_omega_gw_h2(freq, theta)`                                    | Jacobian w.r.t. parameters. Prefers a class-supplied analytic override, else falls back to the declared backend.                                                               |
 | `hess_theta_omega_gw_h2(freq, theta)`                                    | Hessian w.r.t. parameters.                                                                                                                                                     |
 | `d_df_omega_gw_h2`, `d2_df2_omega_gw_h2`, `d2_df_dtheta_omega_gw_h2` | Frequency derivatives and the mixed derivative.                                                                                                                                |
-| `parameter_names`                                                        | Tuple of free-parameter names (inferred from`omega_gw_h2` signature).                                                                                                        |
-| `parameter_labels`                                                       | Read-only mapping`{name: LaTeX label}`.                                                                                                                                      |
+| `parameter_names`                                                        | Tuple of free-parameter names (inferred from `omega_gw_h2` signature).                                                                                                        |
+| `parameter_labels`                                                       | Read-only mapping `{name: LaTeX label}`.                                                                                                                                      |
 | `prior_by_param`                                                         | Read-only mapping`{name: prior dict}`.                                                                                                                                       |
 | `model_type` / `model_name` / `model_label` / `model_id`           | Identity strings.                                                                                                                                                              |
-| `bibtex_entries`                                                         | ClassVar tuple of raw BibTeX strings; access joined via`get_bibtex()`.                                                                                                       |
+| `bibtex_entries`                                                         | ClassVar tuple of raw BibTeX strings; access joined via `get_bibtex()`.                                                                                                       |
 | `jittable` / `differentiation_backend`                                 | ClassVars declaring whether`omega_gw_h2` is JIT-safe and which backend the dispatcher uses when no analytic override is present (`"autodiff"` or `"finite_difference"`). |
 
 ---
@@ -146,7 +146,7 @@ All templates listed below are class names (also their registry keys). The full 
 | `LognormalBump`                 | `log_amplitude, log_pivot, log_width`                      | Log-normal bump                                        |
 | `BrokenPowerLaw`                | `log_amplitude, log_pivot, tilt_1, tilt_2, log_transition` | Broken power law with free smoothness                  |
 | `BrokenPowerLawFixedSmoothness` | `log_amplitude, log_pivot, tilt_1, tilt_2`                 | Broken power law, fixed smoothness                     |
-| `BrokenPowerLawA1`              | `log_amplitude, log_f_b, n_1, n_2, a_1`                    | Smooth broken power law in`a_1` parametrization      |
+| `BrokenPowerLawA1`              | `log_amplitude, log_f_b, n_1, n_2, a_1`                    | Smooth broken power law in `a_1` parametrization      |
 | `DoubleBrokenPowerLaw`          | `log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2` | Double broken power law                                |
 | `DoubleBrokenPowerLawRf`        | `log_amplitude, log_f_2, log_r_f, n_1, n_2, n_3, a_1, a_2` | Reparametrization of DBPL (ratio of break frequencies) |
 | `TwoDoubleBrokenPowerLaws`      | 16 params                                                    | Sum of two double broken power laws                    |

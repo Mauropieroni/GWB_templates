@@ -29,6 +29,9 @@ import jax.numpy as jnp
 import numpy as np
 
 from gwb_templates.template import NumericalTemplate, DifferentiationBackend
+from gwb_templates.utils import bilinear_dS_dix as _bilinear_dS_dix
+from gwb_templates.utils import bilinear_eval as _bilinear_eval
+from gwb_templates.utils import to_frac_ix as _to_frac_ix
 
 ArrayLike: TypeAlias = float | int | np.ndarray | jax.Array
 
@@ -58,100 +61,6 @@ def _load_grid(filename: str) -> tuple[jax.Array, jax.Array, jax.Array]:
     freq_axis = jnp.array(data_np[0, 1:])
     log10_omega = jnp.array(data_np[1:, 1:])
     return gmu_axis, freq_axis, log10_omega
-
-
-# ── JAX bilinear interpolation primitives ────────────────────────────────────
-
-
-def _to_frac_ix(val: ArrayLike, axis: jax.Array) -> jax.Array:
-    """Convert a physical value to a fractional grid index along ``axis``."""
-    n = axis.shape[0]
-    return jnp.asarray((val - axis[0]) / (axis[-1] - axis[0]) * (n - 1))
-
-
-def _bilinear_eval(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Bilinear interpolation of log10(h^2 Omega) at fractional indices."""
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    tx = jnp.clip(ix - kx, 0.0, 1.0)
-
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    return (
-        (1.0 - tx) * (1.0 - ty) * g00
-        + tx * (1.0 - ty) * g10
-        + (1.0 - tx) * ty * g01
-        + tx * ty * g11
-    )
-
-
-def _bilinear_dS_dix(
-    ix: jax.Array,
-    iy: jax.Array,
-    log10_omega: jax.Array,
-    n_gmu: int,
-    n_freq: int,
-) -> jax.Array:
-    """Analytical dS/d(ix) for the bilinear interpolation.
-
-    ``tx = jnp.clip(ix - kx, 0.0, 1.0)`` is not differentiable everywhere: JAX's
-    ``clip`` (built from ``minimum``/``maximum``) has a tie-breaking convention
-    of averaging the two one-sided derivatives exactly at a bound, so
-    ``d(tx)/d(ix)`` is 1 strictly inside (0, 1), 0 strictly outside, and 0.5
-    exactly on a bound (e.g. when ``log_Gmu`` lands exactly on a grid node).
-    We must reproduce that here, or this analytical gradient silently
-    disagrees with ``jax.jacfwd`` by up to 2x right at grid nodes.
-    """
-    kx = jnp.clip(
-        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
-        0,
-        n_gmu - 2,
-    )
-    ky = jnp.clip(
-        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
-        0,
-        n_freq - 2,
-    )
-    ty = jnp.clip(iy - ky, 0.0, 1.0)
-
-    row0 = log10_omega[kx]
-    row1 = log10_omega[kx + 1]
-    g00 = row0[ky]
-    g01 = row0[ky + 1]
-    g10 = row1[ky]
-    g11 = row1[ky + 1]
-
-    dS_dtx = (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
-
-    tx_raw = ix - kx
-    dtx_dix = jnp.where(
-        (tx_raw > 0.0) & (tx_raw < 1.0),
-        1.0,
-        jnp.where((tx_raw == 0.0) | (tx_raw == 1.0), 0.5, 0.0),
-    )
-
-    return dS_dtx * dtx_dix
 
 
 # ── Template classes ──────────────────────────────────────────────────────────
@@ -298,8 +207,6 @@ class CosmicStringModelII(NumericalTemplate):
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
-        self.n_gmu: int = int(gmu_axis.shape[0])
-        self.n_freq_grid: int = int(freq_axis.shape[0])
 
     def omega_gw_h2(
         self,
@@ -307,12 +214,10 @@ class CosmicStringModelII(NumericalTemplate):
         log_Gmu: ArrayLike,
     ) -> jax.Array:
         r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
-        log10_f = jnp.log10(jnp.asarray(frequency))
+        log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        return 10.0 ** _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        return 10.0 ** _bilinear_eval(ix, iy, self.log10_omega)
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -321,17 +226,16 @@ class CosmicStringModelII(NumericalTemplate):
     ) -> jax.Array:
         r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
         log_Gmu = theta[0]
-        log10_f = jnp.log10(jnp.asarray(frequency))
+        log10_f = jnp.log10(frequency)
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
 
-        S = _bilinear_eval(ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid)
+        S = _bilinear_eval(ix, iy, self.log10_omega)
         h2_omega = 10.0**S
 
-        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
-        dS_dix = _bilinear_dS_dix(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        n_gmu = self.gmu_axis.shape[0]
+        d_ix_d_log_Gmu = (n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
+        dS_dix = _bilinear_dS_dix(ix, iy, self.log10_omega)
 
         grad = jnp.log(10.0) * h2_omega * dS_dix * d_ix_d_log_Gmu
         return grad[..., None]

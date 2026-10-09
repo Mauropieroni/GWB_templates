@@ -23,13 +23,12 @@ import jax
 import jax.numpy as jnp
 
 from gwb_templates.template import NumericalTemplate, DifferentiationBackend
+from gwb_templates.utils import bilinear_interp as _bilinear_interp
+from gwb_templates.utils import to_frac_ix as _to_frac_ix
 from gwb_templates.cosmic_string_templates.cosmic_string_model_ii import (
     ArrayLike,
     _DEFAULT_DATA_FILENAME,
-    _bilinear_dS_dix,
-    _bilinear_eval,
     _load_grid,
-    _to_frac_ix,
 )
 
 
@@ -149,8 +148,6 @@ class AbelianHiggsModelII(NumericalTemplate):
         self.gmu_axis: jax.Array = gmu_axis
         self.freq_axis: jax.Array = freq_axis
         self.log10_omega: jax.Array = log10_omega
-        self.n_gmu: int = int(gmu_axis.shape[0])
-        self.n_freq_grid: int = int(freq_axis.shape[0])
 
     def omega_gw_h2(
         self,
@@ -161,34 +158,5 @@ class AbelianHiggsModelII(NumericalTemplate):
         log10_f = jnp.log10(jnp.asarray(frequency))
         ix = _to_frac_ix(log_Gmu, self.gmu_axis)
         iy = _to_frac_ix(log10_f, self.freq_axis)
-        spectrum = 10.0 ** _bilinear_eval(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
+        spectrum = 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)
         return jnp.asarray(10.0**logf * spectrum)
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: ArrayLike,
-        theta: jax.Array,
-    ) -> jax.Array:
-        r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""
-        log_Gmu = theta[0]
-        logf = theta[1]
-        log10_f = jnp.log10(jnp.asarray(frequency))
-        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
-        iy = _to_frac_ix(log10_f, self.freq_axis)
-
-        S = _bilinear_eval(ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid)
-        h2_omega_ii = 10.0**S
-        h2_omega_ah = 10.0**logf * h2_omega_ii
-
-        # d/d(log_Gmu)
-        d_ix_d_log_Gmu = (self.n_gmu - 1) / (self.gmu_axis[-1] - self.gmu_axis[0])
-        dS_dix = _bilinear_dS_dix(
-            ix, iy, self.log10_omega, self.n_gmu, self.n_freq_grid
-        )
-        d_d_log_Gmu = 10.0**logf * jnp.log(10.0) * h2_omega_ii * dS_dix * d_ix_d_log_Gmu
-        # d/d(logf)
-        d_d_logf = jnp.log(10.0) * h2_omega_ah
-
-        return jnp.stack([d_d_log_Gmu, d_d_logf], axis=-1)

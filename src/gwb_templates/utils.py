@@ -312,6 +312,141 @@ def finite_difference_d2f_dtheta(
     return jnp.asarray(mixed.reshape(freq.shape + (np.asarray(parameters).size,)))
 
 
+def to_frac_ix(val: ArrayLike, axis: Array) -> Array:
+    """
+    Convert a physical value to a fractional index along a uniform grid axis.
+
+    ``axis`` must be evenly spaced: the fractional index is obtained by
+    linear rescaling, not by searching the axis. This continuous index is
+    what lets the bilinear helpers below stay fully JAX-traceable (no
+    Python-level branching) and gives a closed-form gradient, which is why
+    grid lookups here go through a fractional index rather than e.g.
+    ``jnp.interp`` or a SciPy grid interpolator.
+
+    Args:
+        val: Physical value(s) to convert.
+        axis: 1D grid axis, assumed uniformly spaced.
+
+    Returns:
+        Fractional index (or indices) into ``axis``.
+    """
+    n = axis.shape[0]
+    return (val - axis[0]) / (axis[-1] - axis[0]) * (n - 1)
+
+
+def bilinear_interp(ix: Array, iy: Array, grid: Array, mode: str = "nearest") -> Array:
+    """
+    Differentiable bilinear interpolation of a 2D grid at fractional indices.
+
+    Thin wrapper around ``jax.scipy.ndimage.map_coordinates`` (``order=1``),
+    so gradients come from JAX autodiff rather than a hand-written formula.
+    ``mode="nearest"`` clamps out-of-range indices to the edge value, matching
+    ``to_frac_ix`` producing an index outside ``[0, n-1]`` (constant
+    extrapolation, zero slope past the grid edge).
+
+    Args:
+        ix: Fractional index along the grid's first axis.
+        iy: Fractional index along the grid's second axis.
+        grid: 2D array of values.
+        mode: Boundary handling passed to ``map_coordinates``.
+
+    Returns:
+        Interpolated value(s), broadcasting over ``ix``/``iy``.
+    """
+    ix_b, iy_b = jnp.broadcast_arrays(jnp.asarray(ix), jnp.asarray(iy))
+    return jax.scipy.ndimage.map_coordinates(grid, [ix_b, iy_b], order=1, mode=mode)
+
+
+def bilinear_eval(ix: Array, iy: Array, grid: Array) -> Array:
+    """
+    Hand-rolled bilinear interpolation of a 2D grid at fractional indices.
+
+    Unlike ``bilinear_interp`` (which delegates to
+    ``jax.scipy.ndimage.map_coordinates`` so autodiff supplies the gradient),
+    this returns the raw arithmetic so a hand-derived gradient
+    (``bilinear_dS_dix``) can be used instead where that is measurably faster.
+
+    Args:
+        ix: Fractional index along the grid's first axis.
+        iy: Fractional index along the grid's second axis.
+        grid: 2D array of values.
+
+    Returns:
+        Interpolated value(s), broadcasting over ``ix``/``iy``.
+    """
+    n_gmu, n_freq = grid.shape
+    kx = jnp.clip(
+        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
+        0,
+        n_gmu - 2,
+    )
+    tx = jnp.clip(ix - kx, 0.0, 1.0)
+
+    ky = jnp.clip(
+        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
+        0,
+        n_freq - 2,
+    )
+    ty = jnp.clip(iy - ky, 0.0, 1.0)
+
+    row0 = grid[kx]
+    row1 = grid[kx + 1]
+    g00 = row0[ky]
+    g01 = row0[ky + 1]
+    g10 = row1[ky]
+    g11 = row1[ky + 1]
+
+    return (
+        (1.0 - tx) * (1.0 - ty) * g00
+        + tx * (1.0 - ty) * g10
+        + (1.0 - tx) * ty * g01
+        + tx * ty * g11
+    )
+
+
+def bilinear_dS_dix(ix: Array, iy: Array, grid: Array) -> Array:
+    """Analytical d(bilinear_eval)/d(ix) for ``bilinear_eval``.
+
+    ``tx = jnp.clip(ix - kx, 0.0, 1.0)`` is not differentiable everywhere: JAX's
+    ``clip`` (built from ``minimum``/``maximum``) has a tie-breaking convention
+    of averaging the two one-sided derivatives exactly at a bound, so
+    ``d(tx)/d(ix)`` is 1 strictly inside (0, 1), 0 strictly outside, and 0.5
+    exactly on a bound (e.g. when the physical value lands exactly on a grid
+    node). We must reproduce that here, or this analytical gradient silently
+    disagrees with ``jax.jacfwd`` by up to 2x right at grid nodes.
+    """
+    n_gmu, n_freq = grid.shape
+    kx = jnp.clip(
+        jnp.floor(jnp.clip(ix, 0.0, n_gmu - 1.0)).astype(jnp.int32),
+        0,
+        n_gmu - 2,
+    )
+    ky = jnp.clip(
+        jnp.floor(jnp.clip(iy, 0.0, n_freq - 1.0)).astype(jnp.int32),
+        0,
+        n_freq - 2,
+    )
+    ty = jnp.clip(iy - ky, 0.0, 1.0)
+
+    row0 = grid[kx]
+    row1 = grid[kx + 1]
+    g00 = row0[ky]
+    g01 = row0[ky + 1]
+    g10 = row1[ky]
+    g11 = row1[ky + 1]
+
+    dS_dtx = (1.0 - ty) * (g10 - g00) + ty * (g11 - g01)
+
+    tx_raw = ix - kx
+    dtx_dix = jnp.where(
+        (tx_raw > 0.0) & (tx_raw < 1.0),
+        1.0,
+        jnp.where((tx_raw == 0.0) | (tx_raw == 1.0), 0.5, 0.0),
+    )
+
+    return dS_dtx * dtx_dix
+
+
 def make_log_log_interpolator(
     freq: AnyArray,
     compute_fn: Callable[..., AnyArray],
