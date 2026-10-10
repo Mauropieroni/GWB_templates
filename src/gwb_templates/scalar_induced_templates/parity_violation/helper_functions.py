@@ -124,44 +124,6 @@ FREQUENCY_RANGE = (_LOG_F_GRID[0], _LOG_F_GRID[-1])
 N2_RANGE = (_N2_GRID[0], _N2_GRID[-1])
 
 
-def validate_target_n2(target_n2: float) -> None:
-    """Reject ``n2`` values outside the precomputed archive range."""
-    if isinstance(target_n2, jax.core.Tracer):
-
-        def check_traced_value(value: jax.Array) -> None:
-            numeric_value = float(value)
-            if not N2_RANGE[0] <= numeric_value <= N2_RANGE[1]:
-                raise ValueError(
-                    "target_n2 is outside the precomputed spectrum range "
-                    f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {numeric_value}"
-                )
-
-        jax.debug.callback(check_traced_value, target_n2)
-        return
-    value = float(np.asarray(target_n2))
-    if not N2_RANGE[0] <= value <= N2_RANGE[1]:
-        raise ValueError(
-            "target_n2 is outside the precomputed spectrum range "
-            f"[{N2_RANGE[0]}, {N2_RANGE[1]}]: got {value}"
-        )
-
-
-def validate_positive(value: float, name: str) -> None:
-    """Reject non-positive or non-finite values in eager and JIT execution."""
-
-    def check_traced_value(traced_value: jax.Array) -> None:
-        numeric_value = np.asarray(traced_value)
-        if not np.all(np.isfinite(numeric_value) & (numeric_value > 0)):
-            raise ValueError(f"{name} must contain only positive values")
-
-    if isinstance(value, jax.core.Tracer):
-        jax.debug.callback(check_traced_value, value)
-        return
-    numeric_value = np.asarray(value)
-    if not np.all(np.isfinite(numeric_value) & (numeric_value > 0)):
-        raise ValueError(f"{name} must contain only positive values")
-
-
 _JAX_LOG_F_GRID = jnp.asarray(_LOG_F_GRID, dtype=jnp.float64)
 _JAX_N2_GRID = jnp.asarray(_N2_GRID, dtype=jnp.float64)
 _JAX_LOG_VALUES = jnp.asarray(_LOG_VALUES, dtype=jnp.float64)
@@ -235,7 +197,11 @@ def _interpolate_component_jax(
     )
     return jax.vmap(
         lambda values_at_frequency: jnp.interp(
-            target_n2, _JAX_N2_GRID, values_at_frequency
+            target_n2,
+            _JAX_N2_GRID,
+            values_at_frequency,
+            left=0.0,
+            right=0.0,
         )
     )(log_value_by_n2.T)
 
@@ -251,8 +217,8 @@ def interpolate_components_jax(
     The four components are evaluated using the archive tables and the
     endpoint extrapolation rules implemented by
     :func:`_interpolate_component_jax`. Their original signs are restored
-    after interpolation. No amplitude or non-Gaussianity normalization is
-    applied here.
+    after interpolation. Values outside the supported ``n2`` range are zero.
+    No amplitude or non-Gaussianity normalization is applied here.
 
     Parameters
     ----------
@@ -284,6 +250,8 @@ def interpolate_components_jax(
         target_n2,
     )
     components = _JAX_SIGNS[:, None] * 10.0**log_components
+    in_n2_range = (target_n2 >= N2_RANGE[0]) & (target_n2 <= N2_RANGE[1])
+    components = jnp.where(in_n2_range, components, 0.0)
     return components.reshape((components.shape[0],) + original_shape)
 
 

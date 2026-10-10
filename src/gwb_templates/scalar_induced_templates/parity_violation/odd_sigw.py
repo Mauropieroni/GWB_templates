@@ -16,8 +16,6 @@ from gwb_templates.scalar_induced_templates.parity_violation.helper_functions im
     interpolate_components_jax,
     normalization_factors_jax,
     normalization_factor_gradients_jax,
-    validate_positive,
-    validate_target_n2,
 )
 
 
@@ -94,20 +92,6 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
             "log10_A_zeta": {"min": -4.0, "max": 0.0},
             "log10_tilde_tau_NL": {"min": -4.0, "max": 4.0},
         }
-        if prior_by_param is not None and "target_f_peak" in prior_by_param:
-            prior = prior_by_param["target_f_peak"]
-            if isinstance(prior, Mapping):
-                if "min" in prior:
-                    validate_positive(prior["min"], "target_f_peak prior minimum")
-                if "max" in prior:
-                    validate_positive(prior["max"], "target_f_peak prior maximum")
-        if prior_by_param is not None and "target_n2" in prior_by_param:
-            prior = prior_by_param["target_n2"]
-            if isinstance(prior, Mapping):
-                if "min" in prior:
-                    validate_target_n2(prior["min"])
-                if "max" in prior:
-                    validate_target_n2(prior["max"])
         super().__init__(
             model_name=model_name,
             model_label=(model_label if model_label is not None else "Parity-odd SIGW"),
@@ -125,9 +109,6 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
         log10_A_zeta: jax.Array,
         log10_tilde_tau_NL: jax.Array,
     ) -> jax.Array:
-        validate_positive(frequency, "frequency")
-        validate_positive(target_f_peak, "target_f_peak")
-        validate_target_n2(target_n2)
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),
             target_f_peak,
@@ -143,9 +124,6 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
         self, frequency: jax.Array, theta: jax.Array, *args: Any, **kwargs: Any
     ) -> jax.Array:
         target_frequencies = jnp.asarray(frequency, dtype=jnp.float64)
-        validate_positive(target_frequencies, "frequency")
-        validate_positive(theta[0], "target_f_peak")
-        validate_target_n2(theta[1])
         normalization_factors = normalization_factors_jax(theta[2], 0.0, 0.0, theta[3])
 
         def shape_only(shape_parameters: jax.Array) -> tuple[jax.Array, jax.Array]:

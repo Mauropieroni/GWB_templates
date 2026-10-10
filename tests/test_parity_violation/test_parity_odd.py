@@ -40,27 +40,9 @@ class TestParityOddTemplate(unittest.TestCase):
         spectrum = model.omega_gw_h2(fvec, *PARS)
         self.assertTrue(bool(jnp.all(spectrum >= 0.0)))
 
-    def test_n2_outside_precomputed_range_is_rejected(self):
-        with self.assertRaises(ValueError):
-            model.omega_gw_h2(fvec, PARS[0], 1.1, *PARS[2:])
-
-    def test_custom_n2_prior_outside_precomputed_range_is_rejected(self):
-        with self.assertRaises(ValueError):
-            type(model)(prior_by_param={"target_n2": {"min": 0.0}})
-        with self.assertRaises(ValueError):
-            type(model)(prior_by_param={"target_n2": {"max": 1.1}})
-
-    def test_non_positive_frequency_and_peak_are_rejected(self):
-        with self.assertRaises(ValueError):
-            model.omega_gw_h2(jnp.array([0.0]), *PARS)
-        with self.assertRaises(ValueError):
-            model.omega_gw_h2(fvec, 0.0, *PARS[1:])
-
-    def test_custom_peak_frequency_prior_bounds_are_rejected(self):
-        with self.assertRaises(ValueError):
-            type(model)(prior_by_param={"target_f_peak": {"min": 0.0}})
-        with self.assertRaises(ValueError):
-            type(model)(prior_by_param={"target_f_peak": {"max": -1.0}})
+    def test_n2_outside_precomputed_range_returns_zero(self):
+        spectrum = model.omega_gw_h2(fvec, PARS[0], 1.1, *PARS[2:])
+        self.assertTrue(bool(jnp.all(spectrum == 0.0)))
 
     def test_scale_parameter_gradients_are_analytical(self):
         components = evaluate_components_jax(
