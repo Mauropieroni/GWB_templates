@@ -1,4 +1,4 @@
-"""Parity-odd scalar-induced gravitational-wave template."""
+"""Parity-violating scalar-induced gravitational-wave template."""
 
 from __future__ import annotations
 
@@ -21,7 +21,8 @@ from gwb_templates.scalar_induced_templates.parity_violation.helper_functions im
 
 class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
     r"""
-    Parity-violating SIGW arising from odd trispectrum (arxiv:2507.02733,2607.16162).
+    Parity-violating SIGW arising from gaussian power spectrum, bispectrum,
+    even trispectrum and odd trispectrum (arxiv:2507.02733,2607.16162).
     Primordial power spectrum set as broken power law, with IR index equal to 4,
     steepest possible growth in canonical single-field inflation (arxiv:1811.11158).
     Partially jaxed interpolation of precomputed grid through helper functions.
@@ -34,6 +35,10 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
         UV spectral index.
     log10_A_zeta
         :math:`\log_{10}` amplitude of the primordial scalar spectrum.
+    log10_f_NL
+        :math:`\log_{10}` of the bispectrum coefficient :math:`f_{NL}`.
+    log10_tau_NL
+        :math:`\log_{10}` of the even trispectrum coefficient :math:`\tau_{NL}`.
     log10_tilde_tau_NL
         :math:`\log_{10}` of the odd trispectrum coefficient
         :math:`\tilde\tau_{NL}`.
@@ -84,12 +89,16 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
             "target_f_peak": r"$f_*\,[\mathrm{Hz}]$",
             "target_n2": r"$n_2$",
             "log10_A_zeta": r"$\log_{10}A_\zeta$",
+            "log10_f_NL": r"$\log_{10}f_{\rm NL}$",
+            "log10_tau_NL": r"$\log_{10}\tau_{\rm NL}$",
             "log10_tilde_tau_NL": r"$\log_{10}\tilde{\tau}_{\rm NL}$",
         }
         priors = {
             "target_f_peak": {"min": 1e-6, "max": 1e4},
             "target_n2": {"min": 0.1, "max": 1.0},
             "log10_A_zeta": {"min": -4.0, "max": 0.0},
+            "log10_f_NL": {"min": -4.0, "max": 2.0},
+            "log10_tau_NL": {"min": -4.0, "max": 4.0},
             "log10_tilde_tau_NL": {"min": -4.0, "max": 4.0},
         }
         super().__init__(
@@ -107,6 +116,8 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
         target_f_peak: jax.Array,
         target_n2: jax.Array,
         log10_A_zeta: jax.Array,
+        log10_f_NL: jax.Array,
+        log10_tau_NL: jax.Array,
         log10_tilde_tau_NL: jax.Array,
     ) -> jax.Array:
         components = evaluate_components_jax(
@@ -114,17 +125,19 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
             target_f_peak,
             target_n2,
             log10_A_zeta,
-            0.0,
-            0.0,
+            log10_f_NL,
+            log10_tau_NL,
             log10_tilde_tau_NL,
         )
-        return jnp.abs(components[3])  # to have positive energy density
+        return jnp.sum(components[:3], axis=0) + jnp.abs(components[3])
 
     def _grad_theta_omega_gw_h2_analytical(
         self, frequency: jax.Array, theta: jax.Array, *args: Any, **kwargs: Any
     ) -> jax.Array:
         target_frequencies = jnp.asarray(frequency, dtype=jnp.float64)
-        normalization_factors = normalization_factors_jax(theta[2], 0.0, 0.0, theta[3])
+        normalization_factors = normalization_factors_jax(
+            theta[2], theta[3], theta[4], theta[5]
+        ).reshape((4,) + (1,) * target_frequencies.ndim)
 
         def shape_only(shape_parameters: jax.Array) -> tuple[jax.Array, jax.Array]:
             components = interpolate_components_jax(
@@ -132,18 +145,29 @@ class OddSIGW(ScalarInducedTemplate, NumericalTemplate):
                 shape_parameters[0],
                 shape_parameters[1],
             )
-            return jnp.abs(components[3] * normalization_factors[3]), components
+            return (
+                jnp.sum(components[:3] * normalization_factors[:3], axis=0)
+                + jnp.abs(components[3] * normalization_factors[3]),
+                components,
+            )
 
         shape_gradient, shape_components = jax.jacfwd(shape_only, has_aux=True)(
             theta[:2]
         )
         normalization_gradient = normalization_factor_gradients_jax(
-            theta[2], 0.0, 0.0, theta[3]
+            theta[2], theta[3], theta[4], theta[5]
         )
+        even_scale_gradient = jnp.einsum(
+            "c...,pc->...p", shape_components[:3], normalization_gradient[:3, :3]
+        )
+        odd_component = jnp.abs(shape_components[3])
         scale_gradient = jnp.stack(
             [
-                jnp.abs(shape_components[3]) * normalization_gradient[0, 3],
-                jnp.abs(shape_components[3]) * normalization_gradient[3, 3],
+                even_scale_gradient[..., 0]
+                + odd_component * normalization_gradient[0, 3],
+                even_scale_gradient[..., 1],
+                even_scale_gradient[..., 2],
+                odd_component * normalization_gradient[3, 3],
             ],
             axis=-1,
         )

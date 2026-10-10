@@ -11,10 +11,23 @@ from gwb_templates.utils import gradient_autodiff
 
 model = get_template_from_registry("OddSIGW")
 fvec = jnp.geomspace(c.f_min, c.f_max, 100)
-PARS = jnp.array([10.0, 0.5, -2.0, 0.0])
+PARS = jnp.array([10.0, 0.5, -2.0, 0.0, 0.0, 0.0])
 
 
 class TestParityOddTemplate(unittest.TestCase):
+    def test_parameter_names(self):
+        self.assertEqual(
+            model.parameter_names,
+            (
+                "target_f_peak",
+                "target_n2",
+                "log10_A_zeta",
+                "log10_f_NL",
+                "log10_tau_NL",
+                "log10_tilde_tau_NL",
+            ),
+        )
+
     def test_shape(self):
         spectrum = model.omega_gw_h2(fvec, *PARS)
         self.assertEqual(spectrum.shape, fvec.shape)
@@ -50,15 +63,23 @@ class TestParityOddTemplate(unittest.TestCase):
             PARS[0],
             PARS[1],
             PARS[2],
-            0.0,
-            0.0,
             PARS[3],
+            PARS[4],
+            PARS[5],
         )
         gradient = model.grad_theta_omega_gw_h2(fvec, PARS)
         log10 = jnp.log(10.0)
         expected = jnp.stack(
             [
-                3.0 * log10 * jnp.abs(components[3]),
+                log10
+                * (
+                    2.0 * components[0]
+                    + 3.0 * components[1]
+                    + 3.0 * components[2]
+                )
+                + 3.0 * log10 * jnp.abs(components[3]),
+                2.0 * log10 * components[1],
+                log10 * components[2],
                 log10 * jnp.abs(components[3]),
             ],
             axis=-1,
