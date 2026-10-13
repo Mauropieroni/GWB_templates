@@ -11,6 +11,11 @@ Double-transition broken power law with a fixed 2/3 mid-slope:
         - 2/3)/\delta}
 
 with fixed :math:`f_0 = 10^{-3}` Hz, mid-slope 2/3, and :math:`\delta = 2`.
+
+This is an exact special case of :class:`DoubleBrokenPowerLaw` (``n_2`` fixed to
+``mid_slope``, ``a_1 = a_2 = delta``), reparametrised from amplitude-at-:math:`f_2` to
+amplitude-at-``f0`` via a closed-form rescaling of ``log_amplitude`` — see
+:meth:`ExtragalacticWd2.omega_gw_h2`.
 """
 
 from __future__ import annotations
@@ -21,6 +26,9 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
+from gwb_templates.generic_templates.double_broken_power_law import (
+    DoubleBrokenPowerLaw,
+)
 from gwb_templates.template import AnalyticTemplate
 
 
@@ -85,6 +93,10 @@ class ExtragalacticWd2(AnalyticTemplate):
         self.f0: jax.Array = f0
         self.mid_slope: jax.Array = mid_slope
         self.delta: jax.Array = delta
+        # Held instance of the generic double-broken power law: the shape here (break
+        # positions + tilts, with n_2/a_1/a_2 fixed) is delegated to it, after an exact
+        # closed-form amplitude reparametrisation (see omega_gw_h2).
+        self._inner = DoubleBrokenPowerLaw()
         super().__init__(**kwargs)
 
     def omega_gw_h2(
@@ -96,15 +108,43 @@ class ExtragalacticWd2(AnalyticTemplate):
         alpha_low: jax.Array,
         alpha_high: jax.Array,
     ) -> jax.Array:
-        L = 1.0 + (f_low / frequency) ** self.delta
-        H = 1.0 + (frequency / f_high) ** self.delta
-        low_term = L ** ((self.mid_slope - alpha_low) / self.delta)
-        high_term = H ** ((alpha_high - self.mid_slope) / self.delta)
-        return (
-            10.0**log_amplitude
-            * (frequency / self.f0) ** self.mid_slope
-            * low_term
-            * high_term
+        r"""
+        Evaluate the shape by delegating to :class:`DoubleBrokenPowerLaw`.
+
+        ``DoubleBrokenPowerLaw`` normalises its amplitude at its second break
+        frequency ``f_2``, whereas this class normalises at ``f0``. The two
+        conventions differ by an overall multiplicative constant that is exactly
+        absorbed into a rescaled ``log_amplitude`` passed to the inner instance, so the
+        delegated call reproduces this class's original closed form bit-for-bit (to
+        floating-point precision), not merely the same shape.
+        """
+        n_1, n_2, n_3 = alpha_low, self.mid_slope, alpha_high
+        a_1 = a_2 = self.delta
+        ratio = f_low / f_high  # f_1 / f_2, in DoubleBrokenPowerLaw's convention
+        # DoubleBrokenPowerLaw's own normalisation factor N such that, with amplitude
+        # a_inner = 10**log_amplitude_inner, Omega_DBPL(f_2) = a_inner.
+        norm = (
+            ratio**n_1
+            * (1.0 + ratio ** (-a_1)) ** ((n_1 - n_2) / a_1)
+            * 2.0 ** ((n_2 - n_3) / a_2)
+        )
+        # Rescale log_amplitude (defined at f0) to log_amplitude_inner (defined at
+        # f_2 = f_high), undoing DoubleBrokenPowerLaw's own f_2-normalisation.
+        log_amplitude_inner = (
+            log_amplitude
+            + self.mid_slope * jnp.log10(f_low / self.f0)
+            - jnp.log10(norm)
+        )
+        return self._inner.omega_gw_h2(
+            frequency,
+            log_amplitude_inner,
+            jnp.log10(f_low),
+            jnp.log10(f_high),
+            n_1,
+            n_2,
+            n_3,
+            a_1,
+            a_2,
         )
 
     def _grad_theta_omega_gw_h2_analytical(

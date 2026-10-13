@@ -70,6 +70,8 @@ class GalacticBinaries(AnalyticTemplate):
     ---------------
     log_amplitude
         Base-10 logarithm of the amplitude.
+    tilt
+        Low-frequency spectral index (model goes as :math:`f^{\rm tilt}`).
     alpha
         Exponential cutoff exponent.
     log_fr1
@@ -85,6 +87,7 @@ class GalacticBinaries(AnalyticTemplate):
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Galactic Binaries"
     DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
         "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm Gal})$",
+        "tilt": r"$n_{\rm T}$",
         "alpha": r"$\alpha$",
         "log_fr1": r"$\log_{10}(f_{r1}/\mathrm{Hz})$",
         "log_frk": r"$\log_{10}(f_{rk}/\mathrm{Hz})$",
@@ -92,6 +95,7 @@ class GalacticBinaries(AnalyticTemplate):
     }
     DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
         "log_amplitude": {"min": -14.0, "max": -5.0},
+        "tilt": {"min": 1.0 / 3.0, "max": 1.0},
         "alpha": {"min": 0.1, "max": 10.0},
         "log_fr1": {"min": -4.5, "max": -2.0},
         "log_frk": {"min": -4.5, "max": -2.0},
@@ -122,6 +126,7 @@ class GalacticBinaries(AnalyticTemplate):
         self,
         frequency: jax.Array,
         log_amplitude: jax.Array,
+        tilt: jax.Array,
         alpha: jax.Array,
         log_fr1: jax.Array,
         log_frk: jax.Array,
@@ -132,7 +137,7 @@ class GalacticBinaries(AnalyticTemplate):
         fr2 = 10.0**log_fr2
         return (
             10.0**log_amplitude
-            * frequency ** (2.0 / 3.0)
+            * frequency**tilt
             * jnp.exp(-((frequency / fr1) ** alpha))
             * 0.5
             * (1.0 + jnp.tanh(-(frequency - frk) / fr2))
@@ -143,9 +148,14 @@ class GalacticBinaries(AnalyticTemplate):
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian; columns [log_amplitude, alpha, log_fr1, log_frk,
+        """Analytic Jacobian; columns [log_amplitude, tilt, alpha, log_fr1, log_frk,
         log_fr2]."""
-        alpha, log_fr1, log_frk, log_fr2 = theta[1], theta[2], theta[3], theta[4]
+        alpha, log_fr1, log_frk, log_fr2 = (
+            theta[2],
+            theta[3],
+            theta[4],
+            theta[5],
+        )
         fr1 = 10.0**log_fr1
         frk = 10.0**log_frk
         fr2 = 10.0**log_fr2
@@ -158,7 +168,10 @@ class GalacticBinaries(AnalyticTemplate):
         d_logfr1 = model * (alpha * ln10 * u1)
         d_logfrk = model * (1.0 - t) * frk * ln10 / fr2
         d_logfr2 = model * (1.0 - t) * (frequency - frk) * ln10 / fr2
-        return jnp.stack([d_logA, d_alpha, d_logfr1, d_logfrk, d_logfr2], axis=-1)
+        d_tilt = model * jnp.log(frequency)
+        return jnp.stack(
+            [d_logA, d_tilt, d_alpha, d_logfr1, d_logfrk, d_logfr2], axis=-1
+        )
 
 
 class GalacticBinariesA(GalacticBinaries):
@@ -186,6 +199,7 @@ class GalacticBinariesA(GalacticBinaries):
         snr: float = 7.0,
         links: int = 6,
         *,
+        tilt: jax.Array = jnp.array(2.0 / 3.0),
         alpha: jax.Array | None = None,
         log_fr1: jax.Array | None = None,
         log_frk: jax.Array | None = None,
@@ -196,6 +210,7 @@ class GalacticBinariesA(GalacticBinaries):
         self.alpha: jax.Array = alpha if alpha is not None else alpha_fid
         self.log_fr1: jax.Array = log_fr1 if log_fr1 is not None else jnp.log10(fr1_fid)
         self.log_frk: jax.Array = log_frk if log_frk is not None else jnp.log10(frk_fid)
+        self.tilt: jax.Array = tilt
         self.log_fr2: jax.Array = log_fr2 if log_fr2 is not None else jnp.log10(fr2_fid)
 
         super().__init__(**kwargs)
@@ -208,6 +223,7 @@ class GalacticBinariesA(GalacticBinaries):
         return super().omega_gw_h2(
             frequency,
             log_amplitude,
+            self.tilt,
             self.alpha,
             self.log_fr1,
             self.log_frk,
@@ -221,6 +237,6 @@ class GalacticBinariesA(GalacticBinaries):
     ) -> jax.Array:
         """Analytic Jacobian: single column d/d(log_amplitude)."""
         full_theta = jnp.array(
-            [theta[0], self.alpha, self.log_fr1, self.log_frk, self.log_fr2]
+            [theta[0], self.tilt, self.alpha, self.log_fr1, self.log_frk, self.log_fr2]
         )
         return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[:, :1]

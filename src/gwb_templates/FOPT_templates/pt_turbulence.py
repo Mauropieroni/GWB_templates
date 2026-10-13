@@ -24,11 +24,9 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from gwb_templates.FOPT_templates.pt_base import (
-    a_hubble,
-    double_broken_power_law,
-    jac_double_broken_power_law_amp_freqs,
-    redshift_omega,
+from gwb_templates.FOPT_templates.pt_base import a_hubble, redshift_omega
+from gwb_templates.generic_templates.double_broken_power_law import (
+    DoubleBrokenPowerLaw,
 )
 from gwb_templates.template import AnalyticTemplate
 
@@ -184,6 +182,9 @@ class PtTurbulence(AnalyticTemplate):
             transition_smoothness_low_f,
             transition_smoothness_high_f,
         )
+        # Spectral shape; the physics-level prefactors above feed its amplitude and
+        # break-frequency arguments.
+        self._dbpl = DoubleBrokenPowerLaw()
 
         super().__init__(**kwargs)
 
@@ -216,7 +217,7 @@ class PtTurbulence(AnalyticTemplate):
         )
         h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
 
-        return double_broken_power_law(
+        return self._dbpl.omega_gw_h2(
             frequency,
             jnp.log10(h2Omega2),
             jnp.log10(f_1),
@@ -237,10 +238,9 @@ class PtTurbulence(AnalyticTemplate):
         Analytic Jacobian of the MHD-turbulence FOPT spectrum w.r.t.
         ``(log_Omega_s, log_R_H_star, log_T_star)``.
 
-        Uses the chain rule through :func:`double_broken_power_law`.  The
-        :math:`g_*` tables are piecewise-constant, so their T-derivatives
-        vanish almost everywhere (consistent with autodiff through
-        :func:`jnp.select`).
+        Uses the chain rule through the held :class:`DoubleBrokenPowerLaw` sub-template.
+        The :math:`g_*` tables are piecewise-constant, so their T-derivatives vanish
+        almost everywhere (consistent with autodiff through :func:`jnp.select`).
         """
         log_Omega_s, log_R_H_star, log_T_star = theta[0], theta[1], theta[2]
 
@@ -263,17 +263,22 @@ class PtTurbulence(AnalyticTemplate):
         )
         h2Omega2 = h2FGW0 * prefactor * vA * Omega_s**2 * R_H_star**2
 
-        J_inner = jac_double_broken_power_law_amp_freqs(
-            frequency,
-            jnp.log10(h2Omega2),
-            jnp.log10(f_1),
-            jnp.log10(f_2),
-            n_1,
-            n_2,
-            n_3,
-            a_1,
-            a_2,
-        )  # shape (..., 3)
+        theta_dbpl = jnp.stack(
+            [
+                jnp.log10(h2Omega2),
+                jnp.log10(f_1),
+                jnp.log10(f_2),
+                n_1,
+                n_2,
+                n_3,
+                a_1,
+                a_2,
+            ]
+        )
+        J_full = self._dbpl._grad_theta_omega_gw_h2_analytical(
+            frequency, theta_dbpl
+        )  # shape (..., 8)
+        J_inner = J_full[..., :3]  # (log_amplitude, log_f_1, log_f_2) columns
 
         # h2Omega2 ∝ norm(r_f) * vA * Omega_s^2 * R^2,  r_f ∝ Omega_s^{-1/2}
         # d log_h2Omega2/d log_Omega_s = 1 + r_f^{a_1}/(1 + r_f^{a_1})

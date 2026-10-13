@@ -24,12 +24,8 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from gwb_templates.FOPT_templates.pt_base import (
-    a_hubble,
-    broken_power_law_a1,
-    jac_broken_power_law_a1_amp_freq,
-    redshift_omega,
-)
+from gwb_templates.FOPT_templates.pt_base import a_hubble, redshift_omega
+from gwb_templates.generic_templates.broken_power_law_a1 import BrokenPowerLawA1
 from gwb_templates.template import AnalyticTemplate
 
 
@@ -164,6 +160,9 @@ class PtCollision(AnalyticTemplate):
         self.spectral_index_IR: jax.Array = spectral_index_IR
         self.spectral_index_UV: jax.Array = spectral_index_UV
         self.transition_smoothness: jax.Array = transition_smoothness
+        # Spectral shape; the physics-level prefactors above feed its amplitude and
+        # break-frequency arguments.
+        self._bpl_a1 = BrokenPowerLawA1()
 
         super().__init__(**kwargs)
 
@@ -185,7 +184,7 @@ class PtCollision(AnalyticTemplate):
         aH_star = a_hubble(T_star)
         f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
-        return broken_power_law_a1(
+        return self._bpl_a1.omega_gw_h2(
             frequency,
             jnp.log10(h2Omega_b),
             jnp.log10(f_b),
@@ -203,10 +202,9 @@ class PtCollision(AnalyticTemplate):
         Analytic Jacobian of the bubble-collision FOPT spectrum w.r.t.
         ``(log_K_tilde, log_beta_over_H, log_T_star)``.
 
-        Uses the chain rule through :func:`broken_power_law_a1`.  The
-        :math:`g_*` tables are piecewise-constant, so their T-derivatives
-        vanish almost everywhere (consistent with autodiff through
-        :func:`jnp.select`).
+        Uses the chain rule through the held :class:`BrokenPowerLawA1` sub-template. The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives vanish almost
+        everywhere (consistent with autodiff through :func:`jnp.select`).
         """
         log_K_tilde, log_beta_over_H, log_T_star = theta[0], theta[1], theta[2]
 
@@ -219,16 +217,21 @@ class PtCollision(AnalyticTemplate):
         aH_star = a_hubble(T_star)
         f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
-        # Partials of broken_power_law_a1 w.r.t. (log_amplitude, log_f_b):
-        # shape (..., 2)
-        J_inner = jac_broken_power_law_a1_amp_freq(
-            frequency,
-            jnp.log10(h2Omega_b),
-            jnp.log10(f_b),
-            self.spectral_index_IR,
-            self.spectral_index_UV,
-            self.transition_smoothness,
+        # Partials of BrokenPowerLawA1.omega_gw_h2 w.r.t. its 5 parameters; we only
+        # need the (log_amplitude, log_f_b) columns.
+        theta_bpl = jnp.stack(
+            [
+                jnp.log10(h2Omega_b),
+                jnp.log10(f_b),
+                self.spectral_index_IR,
+                self.spectral_index_UV,
+                self.transition_smoothness,
+            ]
         )
+        J_full = self._bpl_a1._grad_theta_omega_gw_h2_analytical(
+            frequency, theta_bpl
+        )  # shape (..., 5)
+        J_inner = J_full[..., :2]  # shape (..., 2)
 
         # d([log_h2Omega_b, log_f_b])
         #     / d([log_K_tilde, log_beta_over_H, log_T_star])

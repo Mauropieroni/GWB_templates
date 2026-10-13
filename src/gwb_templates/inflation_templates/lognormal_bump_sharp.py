@@ -12,6 +12,9 @@ Two parametrizations:
         \mathrm{LognormalBump}(f; A, f_*, \sigma)\,
         \bigl[1 + A_{\rm sharp}\cos(\omega f + \theta)\bigr]
 
+Both classes hold a :class:`LognormalBump` envelope and a :class:`SharpFeature` (or
+:class:`SharpFeatureLog`) modulation instance, and combine them via the product rule.
+
 Reference: arXiv:2407.04356.
 """
 
@@ -23,51 +26,15 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
+from gwb_templates.generic_templates.lognormal_bump import LognormalBump
+from gwb_templates.inflation_templates.sharp_feature import (
+    SharpFeature,
+    SharpFeatureLog,
+)
 from gwb_templates.template import AnalyticTemplate
 
-
-def _lognormal_bump_envelope(
-    frequency: jax.Array,
-    log_amplitude: jax.Array,
-    log_pivot: jax.Array,
-    log_width: jax.Array,
-) -> jax.Array:
-    """Internal pure-JAX lognormal bump envelope."""
-    amplitude = 10.0**log_amplitude
-    pivot = 10.0**log_pivot
-    width = 10.0**log_width
-    return amplitude * jnp.exp(-0.5 * (jnp.log10(frequency / pivot) / width) ** 2)
-
-
-def _lognormal_bump_envelope_and_grad(
-    frequency: jax.Array,
-    log_amplitude: jax.Array,
-    log_pivot: jax.Array,
-    log_width: jax.Array,
-) -> tuple[jax.Array, jax.Array]:
-    """Return (envelope, d envelope / d[log_A, log_pivot, log_width])."""
-    pivot = 10.0**log_pivot
-    width = 10.0**log_width
-    envelope = _lognormal_bump_envelope(frequency, log_amplitude, log_pivot, log_width)
-    u = jnp.log10(frequency / pivot)
-    ln10 = jnp.log(10.0)
-    d_logA = envelope * ln10
-    d_logpiv = envelope * u / width**2
-    d_logwid = envelope * u**2 * ln10 / width**2
-    dE = jnp.stack([d_logA, d_logpiv, d_logwid], axis=-1)
-    return envelope, dE
-
-
-_ENVELOPE_LABELS = {
-    "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-    "log_pivot": r"$\log_{10}(f_*/\mathrm{Hz})$",
-    "log_width": r"$\log_{10}\sigma$",
-}
-_ENVELOPE_PRIORS = {
-    "log_amplitude": {"min": -20.0, "max": -5.0},
-    "log_pivot": {"min": -5.0, "max": 0.0},
-    "log_width": {"min": -2.0, "max": 1.0},
-}
+_ENVELOPE_LABELS = LognormalBump.DEFAULT_PARAMETER_LABELS
+_ENVELOPE_PRIORS = LognormalBump.DEFAULT_PRIOR_BY_PARAM
 
 
 class LognormalBumpSharp(AnalyticTemplate):
@@ -121,6 +88,13 @@ class LognormalBumpSharp(AnalyticTemplate):
 """,
     )
 
+    def __init__(self, **kwargs: Any) -> None:
+        # Sub-template instances; reused on every call. Both are pure JAX,
+        # so this is safe to construct once at init time.
+        self._envelope = LognormalBump()
+        self._modulation = SharpFeature()
+        super().__init__(**kwargs)
+
     def omega_gw_h2(
         self,
         frequency: jax.Array,
@@ -131,10 +105,13 @@ class LognormalBumpSharp(AnalyticTemplate):
         omega_sharp_Hz: jax.Array,
         phase_sharp: jax.Array,
     ) -> jax.Array:
-        envelope = _lognormal_bump_envelope(
+        """Evaluate the lognormal bump x sharp-feature product at ``frequency``."""
+        envelope = self._envelope.omega_gw_h2(
             frequency, log_amplitude, log_pivot, log_width
         )
-        modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
+        modulation = self._modulation.omega_gw_h2(
+            frequency, A_sharp, omega_sharp_Hz, phase_sharp
+        )
         return envelope * modulation
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -143,16 +120,10 @@ class LognormalBumpSharp(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on lognormal-bump x sharp-feature."""
-        E, dE = _lognormal_bump_envelope_and_grad(
-            frequency, theta[0], theta[1], theta[2]
-        )
-        A_sharp, omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
-        arg = omega_sharp_Hz * frequency + phase_sharp
-        F = 1.0 + A_sharp * jnp.cos(arg)
-        d_A = jnp.cos(arg)
-        d_omega = -A_sharp * jnp.sin(arg) * frequency
-        d_phi = -A_sharp * jnp.sin(arg)
-        dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
+        E = self._envelope.omega_gw_h2(frequency, theta[0], theta[1], theta[2])
+        dE = self._envelope._grad_theta_omega_gw_h2_analytical(frequency, theta[:3])
+        F = self._modulation.omega_gw_h2(frequency, theta[3], theta[4], theta[5])
+        dF = self._modulation._grad_theta_omega_gw_h2_analytical(frequency, theta[3:6])
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
 
 
@@ -207,6 +178,13 @@ class LognormalBumpSharpLog(AnalyticTemplate):
 """,
     )
 
+    def __init__(self, **kwargs: Any) -> None:
+        # Sub-template instances; reused on every call. Both are pure JAX,
+        # so this is safe to construct once at init time.
+        self._envelope = LognormalBump()
+        self._modulation = SharpFeatureLog()
+        super().__init__(**kwargs)
+
     def omega_gw_h2(
         self,
         frequency: jax.Array,
@@ -217,12 +195,13 @@ class LognormalBumpSharpLog(AnalyticTemplate):
         log_omega_sharp_Hz: jax.Array,
         phase_sharp: jax.Array,
     ) -> jax.Array:
-        envelope = _lognormal_bump_envelope(
+        """Evaluate the lognormal bump x log sharp-feature product at ``frequency``."""
+        envelope = self._envelope.omega_gw_h2(
             frequency, log_amplitude, log_pivot, log_width
         )
-        A_sharp = 10.0**log_A_sharp
-        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
+        modulation = self._modulation.omega_gw_h2(
+            frequency, log_A_sharp, log_omega_sharp_Hz, phase_sharp
+        )
         return envelope * modulation
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -231,17 +210,8 @@ class LognormalBumpSharpLog(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         """Analytic Jacobian via product rule on lognormal-bump x log sharp-feature."""
-        E, dE = _lognormal_bump_envelope_and_grad(
-            frequency, theta[0], theta[1], theta[2]
-        )
-        log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[3], theta[4], theta[5]
-        A_sharp = 10.0**log_A_sharp
-        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        arg = omega_sharp_Hz * frequency + phase_sharp
-        F = 1.0 + A_sharp * jnp.cos(arg)
-        ln10 = jnp.log(10.0)
-        d_logA = ln10 * A_sharp * jnp.cos(arg)
-        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * frequency
-        d_phi = -A_sharp * jnp.sin(arg)
-        dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
+        E = self._envelope.omega_gw_h2(frequency, theta[0], theta[1], theta[2])
+        dE = self._envelope._grad_theta_omega_gw_h2_analytical(frequency, theta[:3])
+        F = self._modulation.omega_gw_h2(frequency, theta[3], theta[4], theta[5])
+        dF = self._modulation._grad_theta_omega_gw_h2_analytical(frequency, theta[3:6])
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

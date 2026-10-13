@@ -15,6 +15,9 @@ The template is the product of the double-peak spectrum and a sharp-feature modu
         \mathrm{DoublePeak}(f; \dots)\,
         \bigl[1 + A_{\rm sharp}\cos(\omega f + \theta)\bigr]
 
+Both classes hold a :class:`DoublePeak` envelope and a :class:`SharpFeature` (or
+:class:`SharpFeatureLog`) modulation instance, and combine them via the product rule.
+
 Reference: arXiv:2407.04356.
 """
 
@@ -25,124 +28,16 @@ from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.scipy.special
 
+from gwb_templates.inflation_templates.double_peak import DoublePeak
+from gwb_templates.inflation_templates.sharp_feature import (
+    SharpFeature,
+    SharpFeatureLog,
+)
 from gwb_templates.template import AnalyticTemplate
 
-
-def _double_peak_envelope_and_grad(
-    frequency: jax.Array,
-    log_amplitude: jax.Array,
-    log_pivot: jax.Array,
-    beta: jax.Array,
-    k1: jax.Array,
-    k2: jax.Array,
-    rho: jax.Array,
-    gamma: jax.Array,
-    c1: jax.Array,
-    tilt_p: jax.Array,
-) -> tuple[jax.Array, jax.Array]:
-    """Return (envelope, dE/dpars) with pars ordered like the envelope signature."""
-    amp = 10.0**log_amplitude
-    pivot = 10.0**log_pivot
-
-    x = frequency / pivot
-    x1 = x / k1
-    c1_k1 = c1 / k1
-    log10x2 = jnp.log10(x / k2)
-    ln10 = jnp.log(10.0)
-
-    arg1 = jnp.abs((c1_k1 - x1) / (c1_k1 - 1.0))
-    exp1 = tilt_p * (c1_k1 - 1.0)
-    bump_factor = arg1**exp1
-    H = jnp.heaviside(c1_k1 - x1, 1.0)
-    first_term = beta * x1**tilt_p * bump_factor * H
-
-    log_normal = jnp.exp(-0.5 * (log10x2 / rho) ** 2)
-    erfc_val = jax.scipy.special.erfc(gamma * log10x2)
-    erfc_deriv = (2.0 / jnp.sqrt(jnp.pi)) * jnp.exp(-((gamma * log10x2) ** 2))
-    second_term = log_normal * erfc_val
-
-    envelope = amp * (first_term + second_term)
-
-    d_logA = ln10 * envelope
-    sign_c1_k1 = jnp.where(c1_k1 >= 1.0, 1.0, -1.0)
-    d_first_logpiv = (
-        amp
-        * first_term
-        * (-tilt_p * ln10 + sign_c1_k1 * exp1 / arg1 * (x1 / (c1_k1 - 1.0)) * ln10)
-    )
-    d_second_logpiv = (
-        amp * second_term * log10x2 / rho**2 + amp * log_normal * gamma * erfc_deriv
-    )
-    d_logpiv = d_first_logpiv + d_second_logpiv
-    d_beta = amp * first_term / beta
-    log_arg1 = jnp.log(arg1)
-    d_k1 = (
-        amp
-        * first_term
-        * (-tilt_p / k1 - log_arg1 * tilt_p * c1 / k1**2 + exp1 / (c1 - k1))
-    )
-    d_k2 = (
-        amp * log_normal * erfc_deriv * gamma / k2
-        + amp * second_term * log10x2 / (rho**2 * k2)
-    ) / ln10
-    d_rho = amp * second_term * log10x2**2 / rho**3
-    d_gamma = amp * log_normal * erfc_deriv * (-log10x2)
-
-    dE = jnp.stack([d_logA, d_logpiv, d_beta, d_k1, d_k2, d_rho, d_gamma], axis=-1)
-    return envelope, dE
-
-
-def _double_peak_envelope(
-    frequency: jax.Array,
-    log_amplitude: jax.Array,
-    log_pivot: jax.Array,
-    beta: jax.Array,
-    k1: jax.Array,
-    k2: jax.Array,
-    rho: jax.Array,
-    gamma: jax.Array,
-    c1: jax.Array,
-    tilt_p: jax.Array,
-) -> jax.Array:
-    """Internal pure-JAX double-peak envelope used by the composite classes."""
-    amplitude = 10.0**log_amplitude
-    pivot = 10.0**log_pivot
-
-    x = frequency / pivot
-    x1 = x / k1
-    c1_k1 = c1 / k1
-    log10x2 = jnp.log10(x / k2)
-
-    bump_factor = jnp.abs((c1_k1 - x1) / (c1_k1 - 1.0)) ** (tilt_p * (c1_k1 - 1.0))
-    first_term = beta * x1**tilt_p * bump_factor * jnp.heaviside(c1_k1 - x1, 1.0)
-
-    log_normal = jnp.exp(-0.5 * (log10x2 / rho) ** 2)
-    erfc_term = jax.scipy.special.erfc(gamma * log10x2)
-    second_term = log_normal * erfc_term
-
-    return amplitude * (first_term + second_term)
-
-
-_ENVELOPE_LABELS = {
-    "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-    "log_pivot": r"$\log_{10}(f_*/\mathrm{Hz})$",
-    "beta": r"$\beta$",
-    "k1": r"$\kappa_1$",
-    "k2": r"$\kappa_2$",
-    "rho": r"$\rho$",
-    "gamma": r"$\gamma$",
-}
-_ENVELOPE_PRIORS = {
-    "log_amplitude": {"min": -20.0, "max": -5.0},
-    "log_pivot": {"min": -5.0, "max": 0.0},
-    "beta": {"min": 0.0, "max": 10.0},
-    "k1": {"min": 0.1, "max": 10.0},
-    "k2": {"min": 0.1, "max": 10.0},
-    "rho": {"min": 0.01, "max": 5.0},
-    "gamma": {"min": -5.0, "max": 5.0},
-}
+_ENVELOPE_LABELS = DoublePeak.DEFAULT_PARAMETER_LABELS
+_ENVELOPE_PRIORS = DoublePeak.DEFAULT_PRIOR_BY_PARAM
 
 
 class DoublePeakSharp(AnalyticTemplate):
@@ -161,8 +56,8 @@ class DoublePeakSharp(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    DEFAULT_C1: ClassVar[jax.Array] = jnp.sqrt(jnp.array(2.0 / 3.0))
-    DEFAULT_TILT_P: ClassVar[jax.Array] = jnp.array(2.5)
+    DEFAULT_C1: ClassVar[jax.Array] = DoublePeak.DEFAULT_C1
+    DEFAULT_TILT_P: ClassVar[jax.Array] = DoublePeak.DEFAULT_TILT_P
 
     DEFAULT_MODEL_NAME: ClassVar[str] = "double_peak_sharp"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Peak + Sharp Feature"
@@ -205,9 +100,19 @@ class DoublePeakSharp(AnalyticTemplate):
         tilt_p: jax.Array = DEFAULT_TILT_P,
         **kwargs: Any,
     ) -> None:
-        self.c1: jax.Array = c1
-        self.tilt_p: jax.Array = tilt_p
+        # Sub-template instances; reused on every call. Both are pure JAX,
+        # so this is safe to construct once at init time.
+        self._envelope = DoublePeak(c1=c1, tilt_p=tilt_p)
+        self._modulation = SharpFeature()
         super().__init__(**kwargs)
+
+    @property
+    def c1(self) -> jax.Array:
+        return self._envelope.c1
+
+    @property
+    def tilt_p(self) -> jax.Array:
+        return self._envelope.tilt_p
 
     def omega_gw_h2(
         self,
@@ -223,19 +128,13 @@ class DoublePeakSharp(AnalyticTemplate):
         omega_sharp_Hz: jax.Array,
         phase_sharp: jax.Array,
     ) -> jax.Array:
-        envelope = _double_peak_envelope(
-            frequency,
-            log_amplitude,
-            log_pivot,
-            beta,
-            k1,
-            k2,
-            rho,
-            gamma,
-            self.c1,
-            self.tilt_p,
+        """Evaluate the double-peak x sharp-feature product at ``frequency``."""
+        envelope = self._envelope.omega_gw_h2(
+            frequency, log_amplitude, log_pivot, beta, k1, k2, rho, gamma
         )
-        modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
+        modulation = self._modulation.omega_gw_h2(
+            frequency, A_sharp, omega_sharp_Hz, phase_sharp
+        )
         return envelope * modulation
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -243,26 +142,11 @@ class DoublePeakSharp(AnalyticTemplate):
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian via product rule on envelope x sharp-feature."""
-        E, dE = _double_peak_envelope_and_grad(
-            frequency,
-            theta[0],
-            theta[1],
-            theta[2],
-            theta[3],
-            theta[4],
-            theta[5],
-            theta[6],
-            self.c1,
-            self.tilt_p,
-        )
-        A_sharp, omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
-        arg = omega_sharp_Hz * frequency + phase_sharp
-        F = 1.0 + A_sharp * jnp.cos(arg)
-        d_A = jnp.cos(arg)
-        d_omega = -A_sharp * jnp.sin(arg) * frequency
-        d_phi = -A_sharp * jnp.sin(arg)
-        dF = jnp.stack([d_A, d_omega, d_phi], axis=-1)
+        """Analytic Jacobian via product rule on double-peak x sharp-feature."""
+        E = self._envelope.omega_gw_h2(frequency, *theta[:7])
+        dE = self._envelope._grad_theta_omega_gw_h2_analytical(frequency, theta[:7])
+        F = self._modulation.omega_gw_h2(frequency, theta[7], theta[8], theta[9])
+        dF = self._modulation._grad_theta_omega_gw_h2_analytical(frequency, theta[7:10])
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)
 
 
@@ -283,8 +167,8 @@ class DoublePeakSharpLog(AnalyticTemplate):
         Phase offset (radians).
     """
 
-    DEFAULT_C1: ClassVar[jax.Array] = jnp.sqrt(jnp.array(2.0 / 3.0))
-    DEFAULT_TILT_P: ClassVar[jax.Array] = jnp.array(2.5)
+    DEFAULT_C1: ClassVar[jax.Array] = DoublePeak.DEFAULT_C1
+    DEFAULT_TILT_P: ClassVar[jax.Array] = DoublePeak.DEFAULT_TILT_P
 
     DEFAULT_MODEL_NAME: ClassVar[str] = "double_peak_sharp_log"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Peak + Sharp Feature (log params)"
@@ -327,9 +211,19 @@ class DoublePeakSharpLog(AnalyticTemplate):
         tilt_p: jax.Array = DEFAULT_TILT_P,
         **kwargs: Any,
     ) -> None:
-        self.c1: jax.Array = c1
-        self.tilt_p: jax.Array = tilt_p
+        # Sub-template instances; reused on every call. Both are pure JAX,
+        # so this is safe to construct once at init time.
+        self._envelope = DoublePeak(c1=c1, tilt_p=tilt_p)
+        self._modulation = SharpFeatureLog()
         super().__init__(**kwargs)
+
+    @property
+    def c1(self) -> jax.Array:
+        return self._envelope.c1
+
+    @property
+    def tilt_p(self) -> jax.Array:
+        return self._envelope.tilt_p
 
     def omega_gw_h2(
         self,
@@ -345,21 +239,13 @@ class DoublePeakSharpLog(AnalyticTemplate):
         log_omega_sharp_Hz: jax.Array,
         phase_sharp: jax.Array,
     ) -> jax.Array:
-        envelope = _double_peak_envelope(
-            frequency,
-            log_amplitude,
-            log_pivot,
-            beta,
-            k1,
-            k2,
-            rho,
-            gamma,
-            self.c1,
-            self.tilt_p,
+        """Evaluate the double-peak x log sharp-feature product at ``frequency``."""
+        envelope = self._envelope.omega_gw_h2(
+            frequency, log_amplitude, log_pivot, beta, k1, k2, rho, gamma
         )
-        A_sharp = 10.0**log_A_sharp
-        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        modulation = 1.0 + A_sharp * jnp.cos(omega_sharp_Hz * frequency + phase_sharp)
+        modulation = self._modulation.omega_gw_h2(
+            frequency, log_A_sharp, log_omega_sharp_Hz, phase_sharp
+        )
         return envelope * modulation
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -367,27 +253,9 @@ class DoublePeakSharpLog(AnalyticTemplate):
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian via product rule on envelope x log sharp-feature."""
-        E, dE = _double_peak_envelope_and_grad(
-            frequency,
-            theta[0],
-            theta[1],
-            theta[2],
-            theta[3],
-            theta[4],
-            theta[5],
-            theta[6],
-            self.c1,
-            self.tilt_p,
-        )
-        log_A_sharp, log_omega_sharp_Hz, phase_sharp = theta[7], theta[8], theta[9]
-        A_sharp = 10.0**log_A_sharp
-        omega_sharp_Hz = 10.0**log_omega_sharp_Hz
-        arg = omega_sharp_Hz * frequency + phase_sharp
-        F = 1.0 + A_sharp * jnp.cos(arg)
-        ln10 = jnp.log(10.0)
-        d_logA = ln10 * A_sharp * jnp.cos(arg)
-        d_logomega = -ln10 * A_sharp * omega_sharp_Hz * jnp.sin(arg) * frequency
-        d_phi = -A_sharp * jnp.sin(arg)
-        dF = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
+        """Analytic Jacobian via product rule on double-peak x log sharp-feature."""
+        E = self._envelope.omega_gw_h2(frequency, *theta[:7])
+        dE = self._envelope._grad_theta_omega_gw_h2_analytical(frequency, theta[:7])
+        F = self._modulation.omega_gw_h2(frequency, theta[7], theta[8], theta[9])
+        dF = self._modulation._grad_theta_omega_gw_h2_analytical(frequency, theta[7:10])
         return jnp.concatenate([dE * F[..., None], E[..., None] * dF], axis=-1)

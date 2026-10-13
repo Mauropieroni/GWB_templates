@@ -11,8 +11,10 @@ Two parametrizations:
     \Omega_{\rm GW} h^2(f) = 10^{A}\,
         \mathrm{ResonantFeature}(f; A_r, \omega_r, \phi_r)
 
-Like :mod:`gwb_templates.inflation_templates.resonant_feature`, these templates rely on
-the precomputed table ``data/Resonant_coefficients.npz`` and therefore inherit from
+Each class holds a :class:`ResonantFeature` (or :class:`ResonantFeatureLog`) modulation
+instance and combines it with the flat envelope via the product rule. Like
+:mod:`gwb_templates.inflation_templates.resonant_feature`, these templates rely on the
+precomputed table ``data/Resonant_coefficients.npz`` and inherit from
 :class:`~gwb_templates.template.NumericalTemplate`.
 
 References:
@@ -28,12 +30,10 @@ from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-from interpax import Interpolator1D
 
 from gwb_templates.inflation_templates.resonant_feature import (
-    _build_resonant_interpolators,
-    _resonant_feature_grad_lin,
-    _resonant_feature_impl,
+    ResonantFeature,
+    ResonantFeatureLog,
 )
 from gwb_templates.template import DifferentiationBackend, NumericalTemplate
 
@@ -109,7 +109,10 @@ class FlatResonant(NumericalTemplate):
     }
 
     def setup(self) -> None:
-        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+        # Sub-template instance; reused on every call. Loading its interpolator
+        # table once here is equivalent to the previous direct
+        # `_build_resonant_interpolators()` call.
+        self._modulation = ResonantFeature()
 
     def omega_gw_h2(
         self,
@@ -120,8 +123,8 @@ class FlatResonant(NumericalTemplate):
         phase_resonant: jax.Array,
     ) -> jax.Array:
         envelope = 10.0**log_amplitude
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        modulation = self._modulation.omega_gw_h2(
+            frequency, A_resonant, omega_resonant, phase_resonant
         )
         return envelope * modulation
 
@@ -132,14 +135,11 @@ class FlatResonant(NumericalTemplate):
     ) -> jax.Array:
         """Analytic Jacobian via product rule on flat envelope x resonant modulation."""
         log_amplitude = theta[0]
-        A_resonant, omega_resonant, phase_resonant = theta[1], theta[2], theta[3]
         envelope = 10.0**log_amplitude
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
-        )
+        modulation = self._modulation.omega_gw_h2(frequency, *theta[1:4])
         d_log_amplitude = envelope * modulation * jnp.log(10.0)
-        grad_modulation = _resonant_feature_grad_lin(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        grad_modulation = self._modulation._grad_theta_omega_gw_h2_analytical(
+            frequency, theta[1:4]
         )
         return jnp.concatenate(
             [d_log_amplitude[..., None], envelope * grad_modulation], axis=-1
@@ -217,7 +217,10 @@ class FlatResonantLog(NumericalTemplate):
     }
 
     def setup(self) -> None:
-        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+        # Sub-template instance; reused on every call. Loading its interpolator
+        # table once here is equivalent to the previous direct
+        # `_build_resonant_interpolators()` call.
+        self._modulation = ResonantFeatureLog()
 
     def omega_gw_h2(
         self,
@@ -228,10 +231,8 @@ class FlatResonantLog(NumericalTemplate):
         phase_resonant: jax.Array,
     ) -> jax.Array:
         envelope = 10.0**log_amplitude
-        A_resonant = 10.0**log_A_resonant
-        omega_resonant = 10.0**log_omega_resonant
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        modulation = self._modulation.omega_gw_h2(
+            frequency, log_A_resonant, log_omega_resonant, phase_resonant
         )
         return envelope * modulation
 
@@ -240,28 +241,14 @@ class FlatResonantLog(NumericalTemplate):
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian: envelope chain rule x log resonant-feature chain rule."""
+        """Analytic Jacobian via product rule on flat envelope x log resonant term."""
         log_amplitude = theta[0]
-        log_A_resonant = theta[1]
-        log_omega_resonant = theta[2]
-        phase_resonant = theta[3]
-        A_resonant = 10.0**log_A_resonant
-        omega_resonant = 10.0**log_omega_resonant
         envelope = 10.0**log_amplitude
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        modulation = self._modulation.omega_gw_h2(frequency, *theta[1:4])
+        d_log_amplitude = envelope * modulation * jnp.log(10.0)
+        grad_modulation = self._modulation._grad_theta_omega_gw_h2_analytical(
+            frequency, theta[1:4]
         )
-        ln10 = jnp.log(10.0)
-        d_log_amplitude = envelope * modulation * ln10
-
-        grad_lin = _resonant_feature_grad_lin(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
-        )
-        d_logA = grad_lin[..., 0] * A_resonant * ln10
-        d_logomega = grad_lin[..., 1] * omega_resonant * ln10
-        d_phi = grad_lin[..., 2]
-        grad_modulation_log = jnp.stack([d_logA, d_logomega, d_phi], axis=-1)
-
         return jnp.concatenate(
-            [d_log_amplitude[..., None], envelope * grad_modulation_log], axis=-1
+            [d_log_amplitude[..., None], envelope * grad_modulation], axis=-1
         )

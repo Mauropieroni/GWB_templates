@@ -9,6 +9,10 @@ Implements Eq. B1 of Boileau et al. 2025 (arXiv:2506.18390):
         H^{(\alpha_1 - \alpha_2)\delta}
 
 with :math:`x = f / f_{\mathrm{knee}}` and :math:`H = \tfrac{1}{2}(1 + x^{1/\delta})`.
+
+This closed form is an exact reparametrisation of :class:`BrokenPowerLaw` (``tilt_1 =
+-alpha1``, ``tilt_2 = -alpha2``, ``log_pivot = log10(f_knee)``, ``log_transition =
+log10(delta)``), so this class holds a ``BrokenPowerLaw`` instance and delegates to it.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
+from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
 from gwb_templates.template import AnalyticTemplate
 
 
@@ -76,6 +81,13 @@ class ExtragalacticWd(AnalyticTemplate):
 """,
     )
 
+    def __init__(self, **kwargs: Any) -> None:
+        # Held BrokenPowerLaw instance: the shape is delegated to it via an exact
+        # parameter reparametrisation (sign flips + logs), not merely a fixed special
+        # case, so no generic-side parameter needs to be frozen.
+        self._inner = BrokenPowerLaw()
+        super().__init__(**kwargs)
+
     def omega_gw_h2(
         self,
         frequency: jax.Array,
@@ -85,43 +97,46 @@ class ExtragalacticWd(AnalyticTemplate):
         alpha1: jax.Array,
         alpha2: jax.Array,
     ) -> jax.Array:
-        x = frequency / f_knee
-        low_pl = x ** (-alpha1)
-        H = 0.5 * (1.0 + x ** (1.0 / delta))
-        power = (alpha1 - alpha2) * delta
-        return 10.0**log_amplitude * low_pl * H**power
+        return self._inner.omega_gw_h2(
+            frequency,
+            log_amplitude,
+            jnp.log10(f_knee),
+            -alpha1,
+            -alpha2,
+            jnp.log10(delta),
+        )
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian; columns [log_amplitude, f_knee, delta, alpha1, alpha2]."""
-        log_amplitude, f_knee, delta, alpha1, alpha2 = (
-            theta[0],
-            theta[1],
-            theta[2],
-            theta[3],
-            theta[4],
-        )
-        x = frequency / f_knee
-        x_inv_delta = x ** (1.0 / delta)
-        factor = 1.0 + x_inv_delta
-        H = 0.5 * factor
-        power = (alpha1 - alpha2) * delta
-        model = ExtragalacticWd.omega_gw_h2(
-            self, frequency, log_amplitude, f_knee, delta, alpha1, alpha2
-        )
+        r"""
+        Analytic Jacobian via the chain rule from :class:`BrokenPowerLaw`.
 
-        d_logA = model * jnp.log(10.0)
-        d_fknee = model / f_knee * (alpha1 - (power / H) * (0.5 / delta) * x_inv_delta)
-        d_delta = (
-            model
-            * (alpha1 - alpha2)
-            * (jnp.log(H) - x_inv_delta * jnp.log(x) / (delta * factor))
+        Columns [log_amplitude, f_knee, delta, alpha1, alpha2]; obtained from
+        ``BrokenPowerLaw``'s own Jacobian (columns [log_amplitude, log_pivot, tilt_1,
+        tilt_2, log_transition]) via ``log_pivot = log10(f_knee)``, ``log_transition =
+        log10(delta)``, ``tilt_1 = -alpha1``, ``tilt_2 = -alpha2``.
+        """
+        log_amplitude, f_knee, delta, alpha1, alpha2 = theta
+        theta_inner = jnp.stack(
+            [
+                log_amplitude,
+                jnp.log10(f_knee),
+                -alpha1,
+                -alpha2,
+                jnp.log10(delta),
+            ]
         )
-        d_alpha1 = model * (-jnp.log(x) + delta * jnp.log(H))
-        d_alpha2 = model * delta * (jnp.log(2.0) - jnp.log(factor))
+        J = self._inner._grad_theta_omega_gw_h2_analytical(frequency, theta_inner)
+        ln10 = jnp.log(10.0)
+
+        d_logA = J[..., 0]
+        d_fknee = J[..., 1] / (f_knee * ln10)
+        d_delta = J[..., 4] / (delta * ln10)
+        d_alpha1 = -J[..., 2]
+        d_alpha2 = -J[..., 3]
         return jnp.stack([d_logA, d_fknee, d_delta, d_alpha1, d_alpha2], axis=-1)
 
 

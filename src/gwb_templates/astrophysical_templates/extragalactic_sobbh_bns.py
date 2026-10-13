@@ -24,16 +24,20 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from gwb_templates.template import AnalyticTemplate
+from gwb_templates.generic_templates.power_law import PowerLaw
 
 
-class ExtragalacticSobbhBns(AnalyticTemplate):
+class ExtragalacticSobbhBns(PowerLaw):
     r"""
     Extragalactic SOBBH+BNS foreground with free spectral index.
 
     .. math::
 
         \Omega_{\mathrm{GW}} h^2(f) = 10^{\log_{10} A}\,(f / f_{\mathrm{ref}})^{\alpha}
+
+    This is exactly :class:`PowerLaw` with its pivot renamed ``ref_freq`` for this
+    family's public API; ``omega_gw_h2`` and the analytic Jacobian are inherited
+    unchanged.
 
     Free parameters
     ---------------
@@ -103,24 +107,28 @@ class ExtragalacticSobbhBns(AnalyticTemplate):
         **kwargs: Any,
     ) -> None:
         self.ref_freq: jax.Array = ref_freq
-        super().__init__(**kwargs)
+        super().__init__(pivot=ref_freq, **kwargs)
 
-    def omega_gw_h2(
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-        tilt: jax.Array,
-    ) -> jax.Array:
-        x = frequency / self.ref_freq
-        return 10.0**log_amplitude * x**tilt
+    # omega_gw_h2 is inherited unchanged from PowerLaw: the closed form here is exactly
+    # 10**log_amplitude * (f/ref_freq)**tilt, i.e. PowerLaw's formula with
+    # pivot=ref_freq.
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """Analytic Jacobian: columns [log_amplitude, tilt]."""
-        model = ExtragalacticSobbhBns.omega_gw_h2(self, frequency, theta[0], theta[1])
+        """
+        Analytic Jacobian: columns [log_amplitude, tilt].
+
+        Delegates the model evaluation to :class:`PowerLaw`'s closed form, called
+        unbound (``PowerLaw.omega_gw_h2(self, ...)``) rather than via ``self`` /
+        ``super()``'s dynamic dispatch, so that :class:`ExtragalacticSobbhBnsA`'s
+        narrower (amplitude-only) ``omega_gw_h2`` override doesn't get invoked here with
+        the wrong arity.
+        """
+        log_amplitude, tilt = theta
+        model = PowerLaw.omega_gw_h2(self, frequency, log_amplitude, tilt)
         d_logA = model * jnp.log(10.0)
         d_tilt = model * jnp.log(frequency / self.ref_freq)
         return jnp.stack([d_logA, d_tilt], axis=-1)

@@ -24,6 +24,7 @@ _, _alpha, _fr1, _frk, _fr2 = galactic_pars(4.0, 7.0, 6)
 PARS_FULL = jnp.array(
     [
         PARS[0],
+        model.tilt,
         _alpha,
         jnp.log10(_fr1),
         jnp.log10(_frk),
