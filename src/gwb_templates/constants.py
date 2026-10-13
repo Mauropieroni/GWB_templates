@@ -14,11 +14,15 @@ T0_CMB = 2.7255
 # Scale factor at matter–radiation equality  (a_today ≡ 1)
 a_eq = Omega_R / Omega_M
 # Effective relativistic degrees of freedom today (photons + 3 light neutrinos)
-g_star_0 = 3.91
+g_star_0 = 3.36
+# Effective entropy degrees of freedom today
+g_entropy_0 = 3.91
 # Effective dof at high temperature (Standard Model, T >> 100 GeV)
 g_star_high_T = 106.75
 # CMB temperature today in GeV  (kB * 2.7255 K → GeV)
 T0_CMB_GeV = 2.349e-13
+# CMB temperature today in eV  (kB * 2.7255 K → eV)
+T0_CMB_eV = T0_CMB_GeV * 1e9
 # Planck's constant in eV*s
 h_bar_eV_s = 6.58e-16
 # Planck time in eV^-1
