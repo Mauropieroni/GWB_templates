@@ -75,12 +75,15 @@ class BrokenPowerLaw(AnalyticTemplate):
         r"""
         Evaluate the smooth broken-power-law spectrum at ``frequency``.
         """
-        x = frequency / 10.0**log_pivot
+        log_x = jnp.log(frequency / 10.0**log_pivot)
         delta = 10.0**log_transition
-        return (
-            10.0**log_amplitude
-            * x**tilt_1
-            / (0.5 * (1.0 + x ** (1.0 / delta))) ** ((tilt_1 - tilt_2) * delta)
+        # log(1 + x**(1/delta)), via logaddexp rather than forming x**(1/delta)
+        # directly: for sharp transitions (delta << 1) that power overflows to inf
+        # long before this log does, which would otherwise poison the Jacobian with
+        # 0 * inf / inf - inf cancellations (see _grad_theta_omega_gw_h2_analytical).
+        log1p_t = jnp.logaddexp(0.0, log_x / delta)
+        return 10.0**log_amplitude * jnp.exp(
+            tilt_1 * log_x - (tilt_1 - tilt_2) * delta * (log1p_t - jnp.log(2.0))
         )
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -92,26 +95,29 @@ class BrokenPowerLaw(AnalyticTemplate):
         Analytic Jacobian of the smooth broken power law.
 
         Let :math:`x = f/f_*`, :math:`\delta = 10^{\log_{10}\delta}`,
-        :math:`t = x^{1/\delta}`. See module docstring for full expressions.
+        :math:`t = x^{1/\delta}`. Written via :math:`\log(1 + t)` (``jnp.logaddexp``)
+        and :math:`t/(1+t) = \mathrm{sigmoid}(\log x/\delta)` rather than forming
+        :math:`t` itself, which overflows to ``inf`` for sharp transitions
+        (:math:`\delta \ll 1`) and poisons every term below with ``0 * inf``.
         """
         log_amplitude, log_pivot, tilt_1, tilt_2, log_transition = theta
-        x = frequency / 10.0**log_pivot
+        log_x = jnp.log(frequency / 10.0**log_pivot)
         delta = 10.0**log_transition
-        t = x ** (1.0 / delta)
+        u = log_x / delta
+        log1p_t = jnp.logaddexp(0.0, u)
+        sig = jax.nn.sigmoid(u)  # t / (1 + t)
         model = self.omega_gw_h2(
             frequency, log_amplitude, log_pivot, tilt_1, tilt_2, log_transition
         )
         ln10 = jnp.log(10.0)
+        log2 = jnp.log(2.0)
 
         d_logA = model * ln10
-        d_logpiv = model * ln10 * (-tilt_1 - tilt_2 * t) / (1.0 + t)
-        d_t1 = model * (jnp.log(x) + delta * (jnp.log(2.0) - jnp.log(1.0 + t)))
-        d_t2 = model * delta * (jnp.log(1.0 + t) - jnp.log(2.0))
+        d_logpiv = model * ln10 * (-tilt_1 * (1.0 - sig) - tilt_2 * sig)
+        d_t1 = model * (log_x + delta * (log2 - log1p_t))
+        d_t2 = model * delta * (log1p_t - log2)
         d_logtrans = (
-            model
-            * ln10
-            * (tilt_1 - tilt_2)
-            * (t * jnp.log(x) / (1.0 + t) - delta * jnp.log(0.5 * (1.0 + t)))
+            model * ln10 * (tilt_1 - tilt_2) * (sig * log_x - delta * (log1p_t - log2))
         )
 
         return jnp.stack([d_logA, d_logpiv, d_t1, d_t2, d_logtrans], axis=-1)

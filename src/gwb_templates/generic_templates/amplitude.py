@@ -7,7 +7,10 @@ Single-parameter model for a frequency-independent GWB:
 
     \\Omega_{\\mathrm{GW}} h^2(f) = 10^{\\alpha}
 
-Used as a simple baseline model or as a building block for composite spectra.
+This is exactly :class:`~gwb_templates.generic_templates.power_law.PowerLaw` with
+``tilt = 0``, so this class holds a :class:`PowerLaw` instance and delegates to it
+instead of reimplementing the closed form. Used as a simple baseline model or as a
+building block for composite spectra.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
+from gwb_templates.generic_templates.power_law import PowerLaw
 from gwb_templates.template import AnalyticTemplate
 
 
@@ -43,6 +47,11 @@ class Amplitude(AnalyticTemplate):
     #: TODO: cite
     bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
+    def __init__(self, **kwargs: Any) -> None:
+        # Shape delegate; the flat spectrum is PowerLaw with tilt fixed to zero.
+        self._power_law = PowerLaw()
+        super().__init__(**kwargs)
+
     def omega_gw_h2(
         self,
         frequency: jax.Array,
@@ -58,7 +67,7 @@ class Amplitude(AnalyticTemplate):
         Returns:
             Spectrum :math:`\Omega_{\mathrm{GW}} h^2(f)` at each input frequency.
         """
-        return 10.0**log_amplitude * jnp.ones_like(frequency)
+        return self._power_law.omega_gw_h2(frequency, log_amplitude, jnp.array(0.0))
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -66,12 +75,10 @@ class Amplitude(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         r"""
-        Analytic Jacobian of the flat spectrum.
-
-        :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial(\log_{10}A)
-        = \Omega_{\mathrm{GW}} h^2 \cdot \ln 10`.
+        Analytic Jacobian of the flat spectrum, via :class:`PowerLaw`'s own Jacobian
+        with ``tilt = 0`` (the ``tilt`` column is dropped, not reweighted).
         """
         (log_amplitude,) = theta
-        model = self.omega_gw_h2(frequency, log_amplitude)
-        d_logA = model * jnp.log(10.0)
-        return d_logA[..., None]
+        theta_pl = jnp.stack([log_amplitude, jnp.array(0.0)])
+        J = self._power_law._grad_theta_omega_gw_h2_analytical(frequency, theta_pl)
+        return J[..., :1]

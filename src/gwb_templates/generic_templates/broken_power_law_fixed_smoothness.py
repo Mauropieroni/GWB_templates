@@ -11,6 +11,10 @@ tilt :math:`n_1`, high-frequency tilt :math:`n_2`.
         x^{n_1}\,
         \left(\tfrac{1+x}{2}\right)^{n_2 - n_1},
     \qquad x = f / f_*.
+
+This is exactly :class:`BrokenPowerLaw` with ``log_transition = 0``, so this class holds
+a :class:`BrokenPowerLaw` instance and delegates to it instead of reimplementing the
+closed form.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
+from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
 from gwb_templates.template import AnalyticTemplate
 
 
@@ -58,6 +63,11 @@ class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
     #: TODO: cite
     bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
+    def __init__(self, **kwargs: Any) -> None:
+        # Shape delegate; this class is BrokenPowerLaw with log_transition fixed to 0.
+        self._bpl = BrokenPowerLaw()
+        super().__init__(**kwargs)
+
     def omega_gw_h2(
         self,
         frequency: jax.Array,
@@ -69,8 +79,9 @@ class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
         r"""
         Evaluate the fixed-smoothness broken power law at ``frequency``.
         """
-        x = frequency / 10.0**log_pivot
-        return 10.0**log_amplitude * x**tilt_1 * (0.5 * (1.0 + x)) ** (tilt_2 - tilt_1)
+        return self._bpl.omega_gw_h2(
+            frequency, log_amplitude, log_pivot, tilt_1, tilt_2, jnp.array(0.0)
+        )
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -78,18 +89,13 @@ class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         r"""
-        Analytic Jacobian. Special case of the 5-param BPL with :math:`\delta = 1` (so
-        :math:`t = x`); the :math:`\partial/\partial\log_{10}\delta` column is dropped.
+        Analytic Jacobian, via :class:`BrokenPowerLaw`'s own Jacobian with
+        ``log_transition = 0`` (the :math:`\partial/\partial\log_{10}\delta` column is
+        dropped, not reweighted).
         """
         log_amplitude, log_pivot, tilt_1, tilt_2 = theta
-        x = frequency / 10.0**log_pivot
-        t = x  # delta = 1
-        model = self.omega_gw_h2(frequency, log_amplitude, log_pivot, tilt_1, tilt_2)
-        ln10 = jnp.log(10.0)
-
-        d_logA = model * ln10
-        d_logpiv = model * ln10 * (-tilt_1 - tilt_2 * t) / (1.0 + t)
-        d_t1 = model * (jnp.log(x) + (jnp.log(2.0) - jnp.log(1.0 + t)))
-        d_t2 = model * (jnp.log(1.0 + t) - jnp.log(2.0))
-
-        return jnp.stack([d_logA, d_logpiv, d_t1, d_t2], axis=-1)
+        theta_bpl = jnp.stack(
+            [log_amplitude, log_pivot, tilt_1, tilt_2, jnp.array(0.0)]
+        )
+        J = self._bpl._grad_theta_omega_gw_h2_analytical(frequency, theta_bpl)
+        return J[..., :4]
