@@ -10,7 +10,7 @@ class TestRegistry(unittest.TestCase):
             with self.subTest(label=label):
                 model = get_template_from_registry(label)
                 self.assertIsNotNone(model)
-                self.assertEqual(model.model_name, label)
+                self.assertEqual(model.model_type, label)
 
     def test_unknown_label_raises(self):
         with self.assertRaises(ValueError):

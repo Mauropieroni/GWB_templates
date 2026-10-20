@@ -2,9 +2,9 @@ r"""
 Double broken power-law with frequency-ratio reparametrisation (8 parameters).
 
 Variant of :class:`DoubleBrokenPowerLaw` where ``log_f_1`` is replaced by
-:math:`\log_{10}(f_2/f_1)`. This reparametrisation decouples the overall
-frequency scale from the internal frequency ratio, which can improve
-sampling efficiency when the ratio is well-constrained by the physics.
+:math:`\log_{10}(f_2/f_1)`. This reparametrisation decouples the overall frequency scale
+from the internal frequency ratio, which can improve sampling efficiency when the ratio
+is well-constrained by the physics.
 
 Reference: arXiv:2403.03723.
 """
@@ -12,26 +12,23 @@ Reference: arXiv:2403.03723.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.generic_templates.double_broken_power_law import (
     DoubleBrokenPowerLaw,
 )
 from gwb_templates.template import AnalyticTemplate
 
-ArrayLike: TypeAlias = jtp.ArrayLike
-
 
 class DoubleBrokenPowerLawRf(AnalyticTemplate):
     r"""
     Double broken power law reparameterised with a frequency ratio.
 
-    Identical to :class:`DoubleBrokenPowerLaw` but replaces ``log_f_1``
-    with :math:`\log r_f = \log_{10}(f_2 / f_1)`, so that
+    Identical to :class:`DoubleBrokenPowerLaw` but replaces ``log_f_1`` with
+    :math:`\log r_f = \log_{10}(f_2 / f_1)`, so that
     :math:`\log f_1 = \log f_2 - \log r_f`.
 
     Free parameters
@@ -47,6 +44,41 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
     a_1, a_2
         Smoothness parameters at the two breaks.
     """
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "double_broken_power_law_rf"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Broken Power Law (ratio freq.)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
+        "log_r_f": r"$\log_{10}(f_2/f_1)$",
+        "n_1": r"$n_1$",
+        "n_2": r"$n_2$",
+        "n_3": r"$n_3$",
+        "a_1": r"$a_1$",
+        "a_2": r"$a_2$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {
+            "prior_type": "uniform",
+            "minimum": -20.0,
+            "maximum": -1.0,
+        },
+        "log_f_2": {
+            "prior_type": "uniform",
+            "minimum": -10.0,
+            "maximum": 0.0,
+        },
+        "log_r_f": {
+            "prior_type": "uniform",
+            "minimum": -3.0,
+            "maximum": 3.0,
+        },
+        "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+        "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -70,77 +102,23 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
 """,
     )
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         # Underlying single-DBPL helper used to delegate the analytic
         # gradient via the chain rule.
         self._dbpl = DoubleBrokenPowerLaw()
-
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-            "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
-            "log_r_f": r"$\log_{10}(f_2/f_1)$",
-            "n_1": r"$n_1$",
-            "n_2": r"$n_2$",
-            "n_3": r"$n_3$",
-            "a_1": r"$a_1$",
-            "a_2": r"$a_2$",
-        }
-        default_priors = {
-            "log_amplitude": {
-                "prior_type": "uniform",
-                "minimum": -20.0,
-                "maximum": -1.0,
-            },
-            "log_f_2": {
-                "prior_type": "uniform",
-                "minimum": -10.0,
-                "maximum": 0.0,
-            },
-            "log_r_f": {
-                "prior_type": "uniform",
-                "minimum": -3.0,
-                "maximum": 3.0,
-            },
-            "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-            "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Double Broken Power Law (ratio freq.)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_f_2: ArrayLike,
-        log_r_f: ArrayLike,
-        n_1: ArrayLike,
-        n_2: ArrayLike,
-        n_3: ArrayLike,
-        a_1: ArrayLike,
-        a_2: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_f_2: jax.Array,
+        log_r_f: jax.Array,
+        n_1: jax.Array,
+        n_2: jax.Array,
+        n_3: jax.Array,
+        a_1: jax.Array,
+        a_2: jax.Array,
     ) -> jax.Array:
         r"""
         Evaluate the frequency-ratio reparametrised DBPL at ``frequency``.
@@ -171,8 +149,7 @@ class DoubleBrokenPowerLawRf(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         r"""
-        Analytic Jacobian via the chain rule from
-        :class:`DoubleBrokenPowerLaw`.
+        Analytic Jacobian via the chain rule from :class:`DoubleBrokenPowerLaw`.
 
         Since :math:`\log f_1 = \log f_2 - \log r_f`,
 

@@ -1,10 +1,19 @@
 """
 Abelian Higgs Model II (2 parameters).
 
-Scales the :class:`CosmicStringModelII` (BOS) spectrum by an overall amplitude,
-interpolating continuously between the Nambu-Goto and Abelian Higgs limits.
-Reuses that model's precomputed 2D data grid and JAX bilinear interpolation
-primitives, so JAX automatic differentiation works here too.
+Holds a composed :class:`CosmicStringModelII` (BOS) instance and scales its spectrum
+by an overall amplitude, interpolating continuously between the Nambu-Goto and
+Abelian Higgs limits. The composed instance's grid loading (``setup()``) is reused
+as-is; only the frequency axis, Gmu axis, and grid values it exposes are read here,
+through ``utils.bilinear_interp`` directly rather than ``CosmicStringModelII``'s own
+``omega_gw_h2`` (which uses a different, hand-rolled primitive, ``bilinear_eval``):
+the two agree on values everywhere, but their autodiff gradients differ by a
+tie-breaking factor of 2 exactly at grid nodes, so swapping primitives would be an
+(admittedly narrow) behavior change for round-numbered ``log_Gmu`` values.
+Composition (rather than subclassing :class:`CosmicStringModelII`) also sidesteps
+having a second free parameter (``logf``) widen ``omega_gw_h2``'s signature beyond
+what the parent declares, and avoids inheriting the parent's one-parameter analytical
+gradient override, which wouldn't apply here.
 
 Reference: arXiv:1309.6637 (Blanco-Pillado, Olum & Shlaer — original BOS
            loop-number-density distribution);
@@ -26,9 +35,7 @@ from gwb_templates.template import NumericalTemplate, DifferentiationBackend
 from gwb_templates.utils import bilinear_interp as _bilinear_interp
 from gwb_templates.utils import to_frac_ix as _to_frac_ix
 from gwb_templates.cosmic_string_templates.cosmic_string_model_ii import (
-    ArrayLike,
-    _DEFAULT_DATA_FILENAME,
-    _load_grid,
+    CosmicStringModelII,
 )
 
 
@@ -106,27 +113,24 @@ class AbelianHiggsModelII(NumericalTemplate):
 
     def __init__(
         self,
-        data_filename: str = _DEFAULT_DATA_FILENAME,
+        data_filename: str = CosmicStringModelII.DEFAULT_DATA_FILENAME,
         *,
         model_name: str | None = None,
         model_label: str | None = None,
         parameter_labels: Mapping[str, str] | None = None,
         prior_by_param: Mapping[str, Any] | None = None,
     ) -> None:
-        self.data_filename: str = str(data_filename)
-
-        gmu_axis, _, _ = _load_grid(self.data_filename)
-        # gmu_axis may be stored ascending or descending depending on the data
-        # file, so don't assume axis[0]/axis[-1] are the min/max.
-        log_gmu_min = float(jnp.min(gmu_axis))
-        log_gmu_max = float(jnp.max(gmu_axis))
+        # Composed BOS Model II instance: supplies the grid (and the default
+        # log_Gmu label/prior range below) without re-loading or re-parsing it here.
+        self._model_ii = CosmicStringModelII(data_filename)
+        self.data_filename: str = self._model_ii.data_filename
 
         default_labels = {
-            "log_Gmu": r"$\log_{10}(G\mu)$",
+            **self._model_ii.parameter_labels,
             "logf": r"$\log_{10}(f_\mathrm{NG})$",
         }
         default_priors = {
-            "log_Gmu": {"min": log_gmu_min, "max": log_gmu_max},
+            **self._model_ii.prior_by_param,
             "logf": {"min": -3.0, "max": 3.0},
         }
 
@@ -143,20 +147,14 @@ class AbelianHiggsModelII(NumericalTemplate):
             ),
         )
 
-    def setup(self) -> None:
-        gmu_axis, freq_axis, log10_omega = _load_grid(self.data_filename)
-        self.gmu_axis: jax.Array = gmu_axis
-        self.freq_axis: jax.Array = freq_axis
-        self.log10_omega: jax.Array = log10_omega
-
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Gmu: ArrayLike,
-        logf: ArrayLike,
+        frequency: jax.Array,
+        log_Gmu: jax.Array,
+        logf: jax.Array,
     ) -> jax.Array:
         log10_f = jnp.log10(jnp.asarray(frequency))
-        ix = _to_frac_ix(log_Gmu, self.gmu_axis)
-        iy = _to_frac_ix(log10_f, self.freq_axis)
-        spectrum = 10.0 ** _bilinear_interp(ix, iy, self.log10_omega)
+        ix = _to_frac_ix(log_Gmu, self._model_ii.gmu_axis)
+        iy = _to_frac_ix(log10_f, self._model_ii.freq_axis)
+        spectrum = 10.0 ** _bilinear_interp(ix, iy, self._model_ii.log10_omega)
         return jnp.asarray(10.0**logf * spectrum)

@@ -39,7 +39,9 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any, ClassVar
 
-from gwb_templates.template import Array, DifferentiationBackend, Template
+import jax
+
+from gwb_templates.template import DifferentiationBackend, Template
 
 
 class ScalarInducedTemplate(Template):
@@ -63,8 +65,8 @@ class ScalarInducedTemplate(Template):
     @abstractmethod
     def omega_gw_h2(
         self,
-        frequency: Array,
+        frequency: jax.Array,
         *args: Any,
         **kwargs: Any,
-    ) -> Array:  # pragma: no cover - re-declared to keep this base abstract
+    ) -> jax.Array:  # pragma: no cover - re-declared to keep this base abstract
         ...

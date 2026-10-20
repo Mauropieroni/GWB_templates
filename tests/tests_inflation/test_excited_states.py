@@ -11,12 +11,16 @@ fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
 model = get_template_from_registry("ExcitedStates")
 
-# Choose parameters such that x = 0.5 * f * 10^log_omega_ES is well below
-# the cutoff x_cut = 2 * 10^log_gamma_ES for all PTA frequencies.
-# With log_omega_ES = 8 (omega = 1e8 Hz) and fvec ~ 1e-9..1e-7 Hz:
-#   x ~ 0.5 * 1e-7 * 1e8 = 5
-# With log_gamma_ES = 1 (gamma_ES = 10): x_cut = 20 >> x → well inside.
-PARS = jnp.array([-15.0, 1.0, 8.0])
+# Choose parameters so x = 0.5 * f * 10^log_omega_ES actually crosses the
+# Heaviside cutoff x_cut = 2 * 10^log_gamma_ES within [c.f_min, c.f_max]:
+# x ranges over [0.5 * c.f_min * 10**1.5, 0.5 * c.f_max * 10**1.5] ~ [5e-4, 8],
+# straddling x_cut = 2 * 10**0.0 = 2 — the cutoff this template is defined by.
+PARS = jnp.array([-10.0, 0.0, 1.5])  # log_amplitude, log_gamma_ES, log_omega_ES
+
+_X = 0.5 * fvec * 10.0 ** PARS[2]
+_X_CUT = 2.0 * 10.0 ** PARS[1]
+_BELOW_CUTOFF = _X < _X_CUT
+_AWAY_FROM_JUMP = jnp.abs(_X - _X_CUT) > 1e-3 * _X_CUT
 
 
 class TestExcitedStatesTemplate(unittest.TestCase):
@@ -25,16 +29,30 @@ class TestExcitedStatesTemplate(unittest.TestCase):
         out = model.omega_gw_h2(fvec, *PARS)
         self.assertEqual(out.shape, (N_FREQ,))
 
-    def test_positive(self):
-        """Spectrum should be positive for well-chosen parameters."""
+    def test_nonnegative(self):
         out = model.omega_gw_h2(fvec, *PARS)
         self.assertTrue(jnp.all(out >= 0.0).item())
+
+    def test_nonzero_below_cutoff(self):
+        """The oscillatory factor should actually be exercised, not just the cutoff."""
+        out = model.omega_gw_h2(fvec, *PARS)
+        self.assertTrue(jnp.any(out[_BELOW_CUTOFF] != 0.0).item())
+
+    def test_zero_beyond_cutoff(self):
+        """Heaviside(x_cut - x) should zero out the spectrum past the cutoff."""
+        out = model.omega_gw_h2(fvec, *PARS)
+        self.assertTrue(jnp.allclose(out[~_BELOW_CUTOFF], 0.0))
 
     def test_gradient_shape(self):
         grad = model.grad_theta_omega_gw_h2(fvec, PARS)
         self.assertEqual(grad.shape, (N_FREQ, len(PARS)))
 
     def test_gradient_vs_jacfwd(self):
+        """
+        Compare away from the exact cutoff: the Heaviside jump has a formally
+        undefined derivative there, dropped by design (see the analytic override's
+        docstring) — both the analytic and autodiff gradients agree everywhere else.
+        """
         grad = model.grad_theta_omega_gw_h2(fvec, PARS)
 
         grad_fwd = gradient_autodiff(
@@ -43,7 +61,8 @@ class TestExcitedStatesTemplate(unittest.TestCase):
             PARS,
         )
 
-        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=15)
+        diff = jnp.abs(grad - grad_fwd)[_AWAY_FROM_JUMP]
+        self.assertAlmostEqual(jnp.sum(diff).item(), 0.0, places=15)
 
 
 if __name__ == "__main__":

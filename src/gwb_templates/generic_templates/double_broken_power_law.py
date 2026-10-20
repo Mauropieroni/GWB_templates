@@ -1,10 +1,9 @@
 r"""
 Double broken power-law (DBPL) template for first-order phase transitions.
 
-Generic 8-parameter spectral shape used as a phenomenological model for
-GW sources from first-order phase transitions (sound waves, turbulence,
-bubble collisions). The amplitude is defined at the second break
-frequency :math:`f_2` for stable normalisation:
+Generic 8-parameter spectral shape used as a phenomenological model for GW sources from
+first-order phase transitions (sound waves, turbulence, bubble collisions). The
+amplitude is defined at the second break frequency :math:`f_2` for stable normalisation:
 
 .. math::
 
@@ -22,15 +21,12 @@ Reference: arXiv:2403.03723.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class DoubleBrokenPowerLaw(AnalyticTemplate):
@@ -50,6 +46,41 @@ class DoubleBrokenPowerLaw(AnalyticTemplate):
     a_1, a_2
         Smoothness parameters at the two breaks.
     """
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "double_broken_power_law"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Double Broken Power Law"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        "log_f_1": r"$\log_{10}(f_1/\mathrm{Hz})$",
+        "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
+        "n_1": r"$n_1$",
+        "n_2": r"$n_2$",
+        "n_3": r"$n_3$",
+        "a_1": r"$a_1$",
+        "a_2": r"$a_2$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {
+            "prior_type": "uniform",
+            "minimum": -20.0,
+            "maximum": -1.0,
+        },
+        "log_f_1": {
+            "prior_type": "uniform",
+            "minimum": -10.0,
+            "maximum": 0.0,
+        },
+        "log_f_2": {
+            "prior_type": "uniform",
+            "minimum": -10.0,
+            "maximum": 0.0,
+        },
+        "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+        "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -73,73 +104,17 @@ class DoubleBrokenPowerLaw(AnalyticTemplate):
 """,
     )
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-            "log_f_1": r"$\log_{10}(f_1/\mathrm{Hz})$",
-            "log_f_2": r"$\log_{10}(f_2/\mathrm{Hz})$",
-            "n_1": r"$n_1$",
-            "n_2": r"$n_2$",
-            "n_3": r"$n_3$",
-            "a_1": r"$a_1$",
-            "a_2": r"$a_2$",
-        }
-        default_priors = {
-            "log_amplitude": {
-                "prior_type": "uniform",
-                "minimum": -20.0,
-                "maximum": -1.0,
-            },
-            "log_f_1": {
-                "prior_type": "uniform",
-                "minimum": -10.0,
-                "maximum": 0.0,
-            },
-            "log_f_2": {
-                "prior_type": "uniform",
-                "minimum": -10.0,
-                "maximum": 0.0,
-            },
-            "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "n_3": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-            "a_2": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Double Broken Power Law"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
-
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_f_1: ArrayLike,
-        log_f_2: ArrayLike,
-        n_1: ArrayLike,
-        n_2: ArrayLike,
-        n_3: ArrayLike,
-        a_1: ArrayLike,
-        a_2: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_f_1: jax.Array,
+        log_f_2: jax.Array,
+        n_1: jax.Array,
+        n_2: jax.Array,
+        n_3: jax.Array,
+        a_1: jax.Array,
+        a_2: jax.Array,
     ) -> jax.Array:
         r"""
         Evaluate the double-broken-power-law spectrum at ``frequency``.
@@ -173,8 +148,8 @@ class DoubleBrokenPowerLaw(AnalyticTemplate):
         Analytic Jacobian of the double broken power law.
 
         Closed-form derivatives w.r.t. the 8 parameters
-        ``(log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2)``;
-        see the source for the full expressions.
+        ``(log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2)``; see the source
+        for the full expressions.
         """
         log_amplitude, log_f_1, log_f_2, n_1, n_2, n_3, a_1, a_2 = theta
         x_1 = frequency / 10.0**log_f_1
@@ -226,10 +201,7 @@ class DoubleBrokenPowerLaw(AnalyticTemplate):
         d_a2 = (
             model
             * prefactor_a2
-            * (
-                a_2 * x2a2 * jnp.log(x_2)
-                - (1.0 + x2a2) * jnp.log(0.5 * (1.0 + x2a2))
-            )
+            * (a_2 * x2a2 * jnp.log(x_2) - (1.0 + x2a2) * jnp.log(0.5 * (1.0 + x2a2)))
         )
 
         return jnp.stack(

@@ -11,34 +11,31 @@ Two parametrizations:
     \Omega_{\rm GW} h^2(f) = 10^{A}\,
         \mathrm{ResonantFeature}(f; A_r, \omega_r, \phi_r)
 
-Like :mod:`gwb_templates.inflation_templates.resonant_feature`, these
-templates rely on the precomputed table
-``data/Resonant_coefficients.npz`` and therefore inherit from
+Each class holds a :class:`ResonantFeature` (or :class:`ResonantFeatureLog`) modulation
+instance and combines it with the flat envelope via the product rule. Like
+:mod:`gwb_templates.inflation_templates.resonant_feature`, these templates rely on the
+precomputed table ``data/Resonant_coefficients.npz`` and inherit from
 :class:`~gwb_templates.template.NumericalTemplate`.
 
 References:
-  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline
-  and physics interpretation).
-  arXiv:0907.2916 (Flauger, McAllister, Pajer, Westphal & Xu — original
+  arXiv:2407.04356 (GW from inflation in LISA: reconstruction pipeline and physics
+  interpretation). arXiv:0907.2916 (Flauger, McAllister, Pajer, Westphal & Xu — original
   resonant oscillatory power-spectrum template from axion monodromy).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
-import jax.typing as jtp
-from interpax import Interpolator1D
+import jax.numpy as jnp
 
 from gwb_templates.inflation_templates.resonant_feature import (
-    _build_resonant_interpolators,
-    _resonant_feature_impl,
+    ResonantFeature,
+    ResonantFeatureLog,
 )
-from gwb_templates.template import NumericalTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
+from gwb_templates.template import DifferentiationBackend, NumericalTemplate
 
 
 class FlatResonant(NumericalTemplate):
@@ -94,70 +91,64 @@ class FlatResonant(NumericalTemplate):
     )
 
     jittable: ClassVar[bool] = True
-    differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]
+    differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-            "A_resonant": r"$A_{\rm r}$",
-            "omega_resonant": r"$\omega_{\rm r}$",
-            "phase_resonant": r"$\phi_{\rm r}$",
-        }
-        default_priors = {
-            "log_amplitude": {"min": -20.0, "max": -5.0},
-            "A_resonant": {"min": 0.0, "max": 1.0},
-            "omega_resonant": {"min": 1e-3, "max": 100.0},
-            "phase_resonant": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Flat + Resonant Feature"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+    DEFAULT_MODEL_NAME: ClassVar[str] = "flat_resonant"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Flat + Resonant Feature"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        "A_resonant": r"$A_{\rm r}$",
+        "omega_resonant": r"$\omega_{\rm r}$",
+        "phase_resonant": r"$\phi_{\rm r}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {"min": -20.0, "max": -5.0},
+        "A_resonant": {"min": 0.0, "max": 1.0},
+        "omega_resonant": {"min": 1e-3, "max": 100.0},
+        "phase_resonant": {"min": -3.14159, "max": 3.14159},
+    }
 
     def setup(self) -> None:
-        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+        # Sub-template instance; reused on every call. Loading its interpolator
+        # table once here is equivalent to the previous direct
+        # `_build_resonant_interpolators()` call.
+        self._modulation = ResonantFeature()
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        A_resonant: ArrayLike,
-        omega_resonant: ArrayLike,
-        phase_resonant: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        A_resonant: jax.Array,
+        omega_resonant: jax.Array,
+        phase_resonant: jax.Array,
     ) -> jax.Array:
         envelope = 10.0**log_amplitude
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        modulation = self._modulation.omega_gw_h2(
+            frequency, A_resonant, omega_resonant, phase_resonant
         )
         return envelope * modulation
 
-    # NOTE: see ResonantFeature — autodiff is preserved as the default
-    # backend because the precomputed coefficient-slope tables differ from
-    # interpax's autodiff slope of the value tables.
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on flat envelope x resonant modulation."""
+        log_amplitude = theta[0]
+        envelope = 10.0**log_amplitude
+        modulation = self._modulation.omega_gw_h2(frequency, *theta[1:4])
+        d_log_amplitude = envelope * modulation * jnp.log(10.0)
+        grad_modulation = self._modulation._grad_theta_omega_gw_h2_analytical(
+            frequency, theta[1:4]
+        )
+        return jnp.concatenate(
+            [d_log_amplitude[..., None], envelope * grad_modulation], axis=-1
+        )
 
 
 class FlatResonantLog(NumericalTemplate):
     r"""
-    Flat amplitude multiplied by a log-parametrized resonant-feature
-    modulation.
+    Flat amplitude multiplied by a log-parametrized resonant-feature modulation.
 
     Free parameters
     ---------------
@@ -208,61 +199,56 @@ class FlatResonantLog(NumericalTemplate):
     )
 
     jittable: ClassVar[bool] = True
-    differentiation_backend: ClassVar[str] = "autodiff"  # type: ignore[assignment]
+    differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
-            "log_A_resonant": r"$\log_{10}A_{\rm r}$",
-            "log_omega_resonant": r"$\log_{10}\omega_{\rm r}$",
-            "phase_resonant": r"$\phi_{\rm r}$",
-        }
-        default_priors = {
-            "log_amplitude": {"min": -20.0, "max": -5.0},
-            "log_A_resonant": {"min": -3.0, "max": 0.0},
-            "log_omega_resonant": {"min": -3.0, "max": 2.0},
-            "phase_resonant": {"min": -3.14159, "max": 3.14159},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Flat + Resonant Feature (log params)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+    DEFAULT_MODEL_NAME: ClassVar[str] = "flat_resonant_log"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Flat + Resonant Feature (log params)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_*)$",
+        "log_A_resonant": r"$\log_{10}A_{\rm r}$",
+        "log_omega_resonant": r"$\log_{10}\omega_{\rm r}$",
+        "phase_resonant": r"$\phi_{\rm r}$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {"min": -20.0, "max": -5.0},
+        "log_A_resonant": {"min": -3.0, "max": 0.0},
+        "log_omega_resonant": {"min": -3.0, "max": 2.0},
+        "phase_resonant": {"min": -3.14159, "max": 3.14159},
+    }
 
     def setup(self) -> None:
-        self._interps: dict[str, Interpolator1D] = _build_resonant_interpolators()
+        # Sub-template instance; reused on every call. Loading its interpolator
+        # table once here is equivalent to the previous direct
+        # `_build_resonant_interpolators()` call.
+        self._modulation = ResonantFeatureLog()
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_A_resonant: ArrayLike,
-        log_omega_resonant: ArrayLike,
-        phase_resonant: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_A_resonant: jax.Array,
+        log_omega_resonant: jax.Array,
+        phase_resonant: jax.Array,
     ) -> jax.Array:
         envelope = 10.0**log_amplitude
-        A_resonant = 10.0**log_A_resonant
-        omega_resonant = 10.0**log_omega_resonant
-        modulation = _resonant_feature_impl(
-            frequency, A_resonant, omega_resonant, phase_resonant, self._interps
+        modulation = self._modulation.omega_gw_h2(
+            frequency, log_A_resonant, log_omega_resonant, phase_resonant
         )
         return envelope * modulation
 
-    # NOTE: see ResonantFeature — autodiff preserved.
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+    ) -> jax.Array:
+        """Analytic Jacobian via product rule on flat envelope x log resonant term."""
+        log_amplitude = theta[0]
+        envelope = 10.0**log_amplitude
+        modulation = self._modulation.omega_gw_h2(frequency, *theta[1:4])
+        d_log_amplitude = envelope * modulation * jnp.log(10.0)
+        grad_modulation = self._modulation._grad_theta_omega_gw_h2_analytical(
+            frequency, theta[1:4]
+        )
+        return jnp.concatenate(
+            [d_log_amplitude[..., None], envelope * grad_modulation], axis=-1
+        )
