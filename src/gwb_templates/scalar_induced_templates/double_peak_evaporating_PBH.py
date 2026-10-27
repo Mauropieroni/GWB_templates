@@ -24,6 +24,10 @@ NOTES:
   - xi_1(beta, w) has no closed-form fit and is fixed to a constant (default 1.0).
   - g_*(T_rh) is fixed to the standard-model value 106.75 rather than
     computed self-consistently from M_PBH.
+  - Outside the physical range (w below ~7e-2, or log_beta outside
+    [log_beta_min, log_beta_max](M_PBH, w, gamma)) the spectrum and its
+    gradient are NaN rather than raising, so that samplers can treat these
+    points as zero probability.
 """
 
 from __future__ import annotations
@@ -334,8 +338,14 @@ def _hyp2f1_series(a: ArrayLike, b: ArrayLike, c: ArrayLike, z: jax.Array) -> ja
     k = jnp.arange(n_terms - 1, dtype=dtype)
     ratio = (a + k) * (b + k) / ((c + k) * (k + 1.0))
     coeffs = jnp.concatenate([jnp.ones((1,), dtype=dtype), jnp.cumprod(ratio)])
-    powers = z[..., None] ** jnp.arange(n_terms, dtype=dtype)
-    return jnp.sum(coeffs * powers, axis=-1)
+    # Horner evaluation of sum_k coeffs[k] z^k. Unlike ``z ** arange(n)``,
+    # this has finite derivatives at z = 0: d(z**0)/dz = 0 * z**(-1) is NaN
+    # there, which made the gradient/Hessian NaN above the UV cutoff, where
+    # s0 (and hence z) is clipped to 0.
+    result = jnp.zeros_like(z, dtype=dtype) + coeffs[-1]
+    for k in range(n_terms - 2, -1, -1):
+        result = result * z + coeffs[k]
+    return result
 
 
 def _theta_uv_iso(s0: jax.Array, c_s2: float = _C_S2_RD) -> jax.Array:
@@ -386,77 +396,46 @@ def _window_ad(
 # ---------------------------------------------------------------------------
 
 
-def _check_parameter_validity(
+def _invalid_parameter_mask(
     log_m_pbh: ArrayLike,
     log_beta: ArrayLike,
-    w: jax.Array,
+    w: ArrayLike,
     gamma: ArrayLike,
-    label: str,
-) -> None:
+) -> jax.Array:
     """
-    Raise an error if ``w`` or ``log_beta`` is outside the physical fit range.
+    Boolean mask, True where the parameters lie outside the physical fit range.
 
-    The callback keeps this check compatible with JIT and autodiff, where
-    parameters may be tracers rather than concrete Python values.
+    Invalid means either ``w`` below the validity range of the transfer-function
+    fits (``b > 0.65``, i.e. ``w < ~7e-2``) or ``log_beta`` outside
+    ``[log_beta_min, log_beta_max](log_m_pbh, w, gamma)``. The template returns
+    NaN there instead of raising, so that samplers can treat these points as
+    zero probability (the pipeline maps a NaN log-likelihood to ``-inf``).
+    Pure ``jnp`` operations: safe under ``jit``, ``vmap`` and autodiff.
     """
     b = _b_of_w(w)
     log_beta_min = _log10_beta_min(log_m_pbh, w, gamma)
     log_beta_max = _log10_beta_max(log_m_pbh, w, gamma)
-    invalid_w = jnp.any(b > _B_MAX)
-    invalid_beta = jnp.any((log_beta < log_beta_min) | (log_beta > log_beta_max))
-    invalid = invalid_w | invalid_beta
+    invalid_w = b > _B_MAX
+    invalid_beta = (log_beta < log_beta_min) | (log_beta > log_beta_max)
+    return invalid_w | invalid_beta
 
-    def _raise(
-        invalid_w_value: jax.Array,
-        invalid_beta_value: jax.Array,
-        w_value: jax.Array,
-        b_value: jax.Array,
-        log_beta_value: jax.Array,
-        log_beta_min_value: jax.Array,
-        log_beta_max_value: jax.Array,
-    ) -> None:
-        if bool(invalid_w_value):
-            raise ValueError(
-                f"[{label}] w = {w_value} (b = {b_value}) is outside the "
-                "validity range of the fit (requires b <= 0.65, "
-                "i.e. w >= ~7e-2)."
-            )
-        if bool(invalid_beta_value):
-            raise ValueError(
-                f"[{label}] log_beta = {log_beta_value} is outside the "
-                f"physical range [{log_beta_min_value}, {log_beta_max_value}]."
-            )
 
-    def _error() -> None:
-        jax.debug.callback(
-            _raise,
-            invalid_w,
-            invalid_beta,
-            w,
-            b,
-            log_beta,
-            log_beta_min,
-            log_beta_max,
-        )
-        return None
-
-    try:
-        if bool(invalid):
-            _raise(
-                invalid_w,
-                invalid_beta,
-                w,
-                b,
-                log_beta,
-                log_beta_min,
-                log_beta_max,
-            )
-        return None
-    except TypeError:
-        # Tracers cannot be converted to bool; defer the check to runtime.
-        pass
-
-    jax.lax.cond(invalid, _error, lambda: None)
+def _nan_where_invalid(
+    result: jax.Array,
+    log_m_pbh: ArrayLike,
+    log_beta: ArrayLike,
+    w: ArrayLike,
+    gamma: ArrayLike,
+) -> jax.Array:
+    """Replace ``result`` by NaN wherever the parameters are unphysical."""
+    invalid = _invalid_parameter_mask(log_m_pbh, log_beta, w, gamma)
+    # Broadcast a per-parameter mask over any trailing axes of ``result``
+    # (e.g. the parameter axis of the Jacobian).
+    invalid = jnp.reshape(
+        invalid,
+        jnp.shape(invalid) + (1,) * (result.ndim - jnp.ndim(invalid)),
+    )
+    return jnp.where(invalid, jnp.nan, result)
 
 
 # ---------------------------------------------------------------------------
@@ -680,9 +659,6 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         interface; provided for diagnostic plotting, cf. the individual
         contributions shown in the reference figure).
         """
-        _check_parameter_validity(
-            log_m_pbh, log_beta, w, gamma, "omega_gw_h2_isocurvature"
-        )
         log_amp_iso, log_f_br, log_f_uv = self._isocurvature_params(
             log_m_pbh, log_beta, w, gamma
         )
@@ -695,7 +671,7 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             self._bpl_log_transition,
         )
         window = _window_iso(frequency, log_f_uv)
-        return iso * window
+        return _nan_where_invalid(iso * window, log_m_pbh, log_beta, w, gamma)
 
     def omega_gw_h2_adiabatic(
         self,
@@ -708,9 +684,6 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         n_s: ArrayLike,
     ) -> jax.Array:
         """Adiabatic-induced peak only (see :meth:`omega_gw_h2_isocurvature`)."""
-        _check_parameter_validity(
-            log_m_pbh, log_beta, w, gamma, "omega_gw_h2_adiabatic"
-        )
         log_f_uv = _log10_f_uv(log_m_pbh, self._g_star)
         log_amp_ad, log_f_br1, log_f_br2, n_eff = self._adiabatic_params(
             log_m_pbh, log_beta, w, gamma, log_a_s, n_s, log_f_uv
@@ -728,7 +701,7 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             a2,
         )
         window = _window_ad(frequency, log_f_uv, n_eff)
-        return ad * window
+        return _nan_where_invalid(ad * window, log_m_pbh, log_beta, w, gamma)
 
     def omega_gw_h2(
         self,
@@ -744,7 +717,6 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         Evaluate the total (isocurvature + adiabatic) spectrum at
         ``frequency``, including the smooth UV cutoff windows.
         """
-        _check_parameter_validity(log_m_pbh, log_beta, w, gamma, "omega_gw_h2")
 
         log_amp_iso, log_f_br, log_f_uv = self._isocurvature_params(
             log_m_pbh, log_beta, w, gamma
@@ -776,7 +748,9 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
         )
         window_ad = _window_ad(frequency, log_f_uv, n_eff)
 
-        return iso * window_iso + ad * window_ad
+        return _nan_where_invalid(
+            iso * window_iso + ad * window_ad, log_m_pbh, log_beta, w, gamma
+        )
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
@@ -873,9 +847,10 @@ class EvaporatingPBHDoublyPeaked(AnalyticTemplate):
             jax.jacfwd(ad_window_map, argnums=tuple(range(6)))(*parameters), axis=-1
         )
 
-        return (
+        grad = (
             window_iso[..., None] * bpl_grad_theta
             + bpl[..., None] * window_iso_theta
             + window_ad[..., None] * dbpl_grad_theta
             + dbpl[..., None] * window_ad_theta
         )
+        return _nan_where_invalid(grad, log_m_pbh, log_beta, w, gamma)
