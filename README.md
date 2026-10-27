@@ -224,6 +224,13 @@ radiation- or EMD-domination kernel. See arXiv:2501.11320 for the configurations
 | `SIGWAYEarlyMatterDomination`  | `As, kmax, etaR`                   | Flat source with sharp UV cutoff, instant EMD→RD kernel                                                                              |
 | `SIGWAYSingleFieldUSR`         | `a, lam, v, nfac`                  | Ultra-slow-roll single-field spectrum from a Mukhanov-Sasaki solve (fixed quasi-inflection-point potential; FD backend, not jittable) |
 
+### Scalar-induced gravitational waves
+
+| Class | Parameters | Description |
+| --- | --- | --- |
+| `EvenSIGW` | `target_f_peak, target_n2, log10_A_zeta, f_NL, tau_NL` | Parity-even SIGW from power spectrum, bispectrum, even trispectrum |
+| `OddSIGW` | `target_f_peak, target_n2, log10_A_zeta, f_NL, tau_NL, tilde_tau_NL` | Parity-odd SIGW (sum of parity-even SIGW and odd trispectrum) |
+
 ---
 
 ## Project structure
