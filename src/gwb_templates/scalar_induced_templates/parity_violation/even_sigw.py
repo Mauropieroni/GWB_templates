@@ -35,10 +35,10 @@ class EvenSIGW(ScalarInducedTemplate, NumericalTemplate):
         UV spectral index.
     log10_A_zeta
         :math:`\log_{10}` amplitude of the primordial scalar spectrum.
-    log10_f_NL
-        :math:`\log_{10}` of the bispectrum coefficient :math:`f_{NL}`.
-    log10_tau_NL
-        :math:`\log_{10}` of the even trispectrum coefficient :math:`\tau_{NL}`.
+    f_NL
+        Bispectrum coefficient :math:`f_{NL}`.
+    tau_NL
+        Even trispectrum coefficient :math:`\tau_{NL}`.
     """
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
@@ -86,15 +86,15 @@ class EvenSIGW(ScalarInducedTemplate, NumericalTemplate):
             "target_f_peak": r"$f_*\,[\mathrm{Hz}]$",
             "target_n2": r"$n_2$",
             "log10_A_zeta": r"$\log_{10}A_\zeta$",
-            "log10_f_NL": r"$\log_{10}f_{\rm NL}$",
-            "log10_tau_NL": r"$\log_{10}\tau_{\rm NL}$",
+            "f_NL": r"$f_{\rm NL}$",
+            "tau_NL": r"$\tau_{\rm NL}$",
         }
         priors = {
             "target_f_peak": {"min": 1e-6, "max": 1e4},
             "target_n2": {"min": 0.1, "max": 1.0},
             "log10_A_zeta": {"min": -4.0, "max": 0.0},
-            "log10_f_NL": {"min": -4.0, "max": 2.0},
-            "log10_tau_NL": {"min": -4.0, "max": 4.0},
+            "f_NL": {"min": 0.0, "max": 100.0},
+            "tau_NL": {"min": 1e-4, "max": 1e4},
         }
         super().__init__(
             model_name=model_name,
@@ -113,16 +113,16 @@ class EvenSIGW(ScalarInducedTemplate, NumericalTemplate):
         target_f_peak: jax.Array,
         target_n2: jax.Array,
         log10_A_zeta: jax.Array,
-        log10_f_NL: jax.Array,
-        log10_tau_NL: jax.Array,
+        f_NL: jax.Array,
+        tau_NL: jax.Array,
     ) -> jax.Array:
         components = evaluate_components_jax(
             jnp.asarray(frequency, dtype=jnp.float64),
             target_f_peak,
             target_n2,
             log10_A_zeta,
-            log10_f_NL,
-            log10_tau_NL,
+            f_NL,
+            tau_NL,
             0.0,
         )
         return jnp.sum(components[:3], axis=0)

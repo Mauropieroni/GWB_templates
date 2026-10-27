@@ -257,28 +257,28 @@ def interpolate_components_jax(
 
 def normalization_factors_jax(
     log10_A_zeta: float,
-    log10_f_NL: float,
-    log10_tau_NL: float,
-    log10_tilde_tau_NL: float,
+    f_NL: float,
+    tau_NL: float,
+    tilde_tau_NL: float,
 ) -> jax.Array:
     """
     Return the four perturbative normalization factors.
 
-    The inputs are base-10 logarithms of the primordial scalar amplitude and
-    the three non-Gaussianity parameters. The returned factors multiply the
-    corresponding unnormalised components in the order ``(IGW1, IGW2,
-    IGW3, VGW)``.
+    The scalar amplitude is supplied as a base-10 logarithm, while the
+    non-Gaussianity parameters are supplied in linear coordinates. The
+    returned factors multiply the corresponding unnormalised components in
+    the order ``(IGW1, IGW2, IGW3, VGW)``.
 
     Parameters
     ----------
     log10_A_zeta : float
         Base-10 logarithm of the scalar amplitude ``A_zeta``.
-    log10_f_NL : float
-        Base-10 logarithm of ``f_NL``.
-    log10_tau_NL : float
-        Base-10 logarithm of ``tau_NL``.
-    log10_tilde_tau_NL : float
-        Base-10 logarithm of ``tilde_tau_NL``.
+    f_NL : float
+        Bispectrum coefficient in linear coordinates.
+    tau_NL : float
+        Even trispectrum coefficient in linear coordinates.
+    tilde_tau_NL : float
+        Odd trispectrum coefficient in linear coordinates.
 
     Returns
     -------
@@ -288,9 +288,6 @@ def normalization_factors_jax(
         ``A_zeta**3 * tilde_tau_NL``.
     """
     A_zeta = 10.0**log10_A_zeta
-    f_NL = 10.0**log10_f_NL
-    tau_NL = 10.0**log10_tau_NL
-    tilde_tau_NL = 10.0**log10_tilde_tau_NL
     return jnp.stack(
         [
             A_zeta**2,
@@ -303,49 +300,60 @@ def normalization_factors_jax(
 
 def normalization_factor_gradients_jax(
     log10_A_zeta: float,
-    log10_f_NL: float,
-    log10_tau_NL: float,
-    log10_tilde_tau_NL: float,
+    f_NL: float,
+    tau_NL: float,
+    tilde_tau_NL: float,
 ) -> jax.Array:
     """
     Return derivatives of the four normalization factors.
 
-    Derivatives are taken with respect to the four base-10 logarithmic
-    parameters in the order ``(log10_A_zeta, log10_f_NL, log10_tau_NL,
-    log10_tilde_tau_NL)``.
+    Derivatives are taken with respect to the parameters in the order
+    ``(log10_A_zeta, f_NL, tau_NL, tilde_tau_NL)``.
 
     Parameters
     ----------
     log10_A_zeta : float
         Base-10 logarithm of the scalar amplitude ``A_zeta``.
-    log10_f_NL : float
-        Base-10 logarithm of ``f_NL``.
-    log10_tau_NL : float
-        Base-10 logarithm of ``tau_NL``.
-    log10_tilde_tau_NL : float
-        Base-10 logarithm of ``tilde_tau_NL``.
+    f_NL : float
+        Bispectrum coefficient in linear coordinates.
+    tau_NL : float
+        Even trispectrum coefficient in linear coordinates.
+    tilde_tau_NL : float
+        Odd trispectrum coefficient in linear coordinates.
 
     Returns
     -------
     jax.Array
-        Jacobian with shape ``(4, 4)``. Rows correspond to the four logarithmic
-        inputs and columns to the four normalization factors.
+        Jacobian with shape ``(4, 4)``. Rows correspond to the four inputs and
+        columns to the four normalization factors.
     """
-    log10_values = jnp.log(10.0)
     factors = normalization_factors_jax(
-        log10_A_zeta,
-        log10_f_NL,
-        log10_tau_NL,
-        log10_tilde_tau_NL,
+        log10_A_zeta, f_NL, tau_NL, tilde_tau_NL
     )
-    return log10_values * jnp.stack(
+    log10_derivatives = jnp.log(10.0) * jnp.stack(
         [
-            jnp.stack([2.0 * factors[0], 0.0, 0.0, 0.0]),
-            jnp.stack([3.0 * factors[1], 2.0 * factors[1], 0.0, 0.0]),
-            jnp.stack([3.0 * factors[2], 0.0, factors[2], 0.0]),
-            jnp.stack([3.0 * factors[3], 0.0, 0.0, factors[3]]),
-        ],
-        axis=1,
+            jnp.stack(
+                [
+                    2.0 * factors[0],
+                    3.0 * factors[1],
+                    3.0 * factors[2],
+                    3.0 * factors[3],
+                ]
+            ),
+        ]
+    )
+    A_zeta = 10.0**log10_A_zeta
+    return jnp.concatenate(
+        (
+            log10_derivatives,
+            jnp.stack(
+                [
+                    jnp.stack([0.0, 2.0 * A_zeta**3 * f_NL, 0.0, 0.0]),
+                    jnp.stack([0.0, 0.0, A_zeta**3, 0.0]),
+                    jnp.stack([0.0, 0.0, 0.0, A_zeta**3]),
+                ]
+            ),
+        )
     )
 
 
@@ -354,9 +362,9 @@ def evaluate_components_jax(
     target_f_peak: float,
     target_n2: float,
     log10_A_zeta: float,
-    log10_f_NL: float,
-    log10_tau_NL: float,
-    log10_tilde_tau_NL: float,
+    f_NL: float,
+    tau_NL: float,
+    tilde_tau_NL: float,
 ) -> jax.Array:
     """
     Return normalized ``(IGW1, IGW2, IGW3, VGW)`` components.
@@ -376,12 +384,12 @@ def evaluate_components_jax(
         Target value of the spectral parameter ``n2``.
     log10_A_zeta : float
         Base-10 logarithm of the scalar amplitude ``A_zeta``.
-    log10_f_NL : float
-        Base-10 logarithm of ``f_NL``.
-    log10_tau_NL : float
-        Base-10 logarithm of ``tau_NL``.
-    log10_tilde_tau_NL : float
-        Base-10 logarithm of ``tilde_tau_NL``.
+    f_NL : float
+        Bispectrum coefficient in linear coordinates.
+    tau_NL : float
+        Even trispectrum coefficient in linear coordinates.
+    tilde_tau_NL : float
+        Odd trispectrum coefficient in linear coordinates.
 
     Returns
     -------
@@ -391,7 +399,7 @@ def evaluate_components_jax(
     """
     frequency_axes = (1,) * target_frequencies.ndim
     normalization_factors = normalization_factors_jax(
-        log10_A_zeta, log10_f_NL, log10_tau_NL, log10_tilde_tau_NL
+        log10_A_zeta, f_NL, tau_NL, tilde_tau_NL
     ).reshape((4,) + frequency_axes)
     return interpolate_components_jax(target_frequencies, target_f_peak, target_n2) * (
         normalization_factors

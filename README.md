@@ -228,8 +228,8 @@ radiation- or EMD-domination kernel. See arXiv:2501.11320 for the configurations
 
 | Class | Parameters | Description |
 | --- | --- | --- |
-| `EvenSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL` | Parity-even contributions from power spectrum, bispectrum, even trispectrum |
-| `OddSIGW` | `target_f_peak, target_n2, log10_A_zeta, log10_f_NL, log10_tau_NL, log10_tilde_tau_NL` | Sum of parity-even and parity-odd SIGW contributions |
+| `EvenSIGW` | `target_f_peak, target_n2, log10_A_zeta, f_NL, tau_NL` | Parity-even SIGW from power spectrum, bispectrum, even trispectrum |
+| `OddSIGW` | `target_f_peak, target_n2, log10_A_zeta, f_NL, tau_NL, tilde_tau_NL` | Parity-odd SIGW (sum of parity-even SIGW and odd trispectrum) |
 
 ---
 

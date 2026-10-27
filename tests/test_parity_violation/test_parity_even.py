@@ -13,7 +13,7 @@ from gwb_templates.utils import gradient_autodiff
 
 model = get_template_from_registry("EvenSIGW")
 fvec = jnp.geomspace(c.f_min, c.f_max, 100)
-PARS = jnp.array([10.0, 0.5, -2.0, 0.0, 0.0])
+PARS = jnp.array([10.0, 0.5, -2.0, 10.0, 1.0])
 
 
 class TestParityEvenTemplate(unittest.TestCase):
@@ -33,8 +33,8 @@ class TestParityEvenTemplate(unittest.TestCase):
                 "target_f_peak",
                 "target_n2",
                 "log10_A_zeta",
-                "log10_f_NL",
-                "log10_tau_NL",
+                "f_NL",
+                "tau_NL",
             ),
         )
 
@@ -82,14 +82,12 @@ class TestParityEvenTemplate(unittest.TestCase):
             0.0,
         )
         gradient = model.grad_theta_omega_gw_h2(fvec, PARS)
-        log10 = jnp.log(10.0)
-
         expected = jnp.stack(
             [
-                log10
+                jnp.log(10.0)
                 * (2.0 * components[0] + 3.0 * components[1] + 3.0 * components[2]),
-                log10 * 2.0 * components[1],
-                log10 * components[2],
+                2.0 * components[1] / PARS[3],
+                components[2] / PARS[4],
             ],
             axis=-1,
         )
