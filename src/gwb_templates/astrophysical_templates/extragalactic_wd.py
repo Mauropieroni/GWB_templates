@@ -197,4 +197,4 @@ class ExtragalacticWdA(ExtragalacticWd):
         full_theta = jnp.array(
             [theta[0], self.f_knee, self.delta, self.alpha1, self.alpha2]
         )
-        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[:, :1]
+        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[..., :1]
