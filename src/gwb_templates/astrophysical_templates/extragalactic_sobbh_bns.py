@@ -177,4 +177,4 @@ class ExtragalacticSobbhBnsA(ExtragalacticSobbhBns):
     ) -> jax.Array:
         """Analytic Jacobian: single column d/d(log_amplitude)."""
         full_theta = jnp.array([theta[0], self.tilt])
-        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[:, :1]
+        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[..., :1]
