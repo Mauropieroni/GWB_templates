@@ -180,4 +180,5 @@ class GalacticBinariesOldA(GalacticBinariesOld):
         full_theta = jnp.array(
             [theta[0], self.alpha, self.beta, self.kappa, self.gamma, self.fk]
         )
-        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[..., :1]
+        J = super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)
+        return J[..., :1]
