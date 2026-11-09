@@ -18,7 +18,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from gwb_templates.template import AnalyticTemplate
+from gwb_templates.template import AnalyticTemplate, FrozenParametersMixin
 
 
 class GalacticBinariesOld(AnalyticTemplate):
@@ -104,7 +104,7 @@ class GalacticBinariesOld(AnalyticTemplate):
         """Analytic Jacobian; columns [log_amplitude, alpha, beta, kappa, gamma, fk]."""
         alpha, beta, kappa, gamma, fk = theta[1], theta[2], theta[3], theta[4], theta[5]
         t = jnp.tanh(gamma * (fk - frequency))
-        model = GalacticBinariesOld.omega_gw_h2(self, frequency, *theta)
+        model = self.omega_gw_h2(frequency, *theta)
         ln10 = jnp.log(10.0)
         d_logA = model * ln10
         d_alpha = model * (-(frequency**alpha) * jnp.log(frequency))
@@ -115,14 +115,13 @@ class GalacticBinariesOld(AnalyticTemplate):
         return jnp.stack([d_logA, d_alpha, d_beta, d_kappa, d_gamma, d_fk], axis=-1)
 
 
-class GalacticBinariesOldA(GalacticBinariesOld):
+class GalacticBinariesOldA(FrozenParametersMixin, AnalyticTemplate):
     r"""
     Old galactic binary foreground — amplitude-only variant.
 
-    Free parameter: ``log_amplitude`` only. Inherits :attr:`bibtex_entries` and the
-    underlying spectral shape from :class:`GalacticBinariesOld`, fixing ``alpha``,
-    ``beta``, ``kappa``, ``gamma``, ``fk`` at the fiducial values from arXiv:1803.01944
-    (Table 1) (or values passed at construction).
+    Free parameter: ``log_amplitude`` only. :class:`GalacticBinariesOld` with
+    ``alpha``, ``beta``, ``kappa``, ``gamma``, ``fk`` held fixed at the fiducial values
+    from arXiv:1803.01944 (Table 1) (or values passed at construction).
     """
 
     DEFAULT_ALPHA: ClassVar[jax.Array] = jnp.array(0.138)
@@ -131,14 +130,17 @@ class GalacticBinariesOldA(GalacticBinariesOld):
     DEFAULT_GAMMA: ClassVar[jax.Array] = jnp.array(1680.0)
     DEFAULT_FK: ClassVar[jax.Array] = jnp.array(0.00113)
 
+    PARENT = GalacticBinariesOld
+    FROZEN: ClassVar[Mapping[str, Any]] = {
+        "alpha": DEFAULT_ALPHA,
+        "beta": DEFAULT_BETA,
+        "kappa": DEFAULT_KAPPA,
+        "gamma": DEFAULT_GAMMA,
+        "fk": DEFAULT_FK,
+    }
+
     DEFAULT_MODEL_NAME: ClassVar[str] = "gb_old_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Galactic Binaries old (amplitude only)"
-    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
-        "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm Gal})$",
-    }
-    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
-        "log_amplitude": {"min": -14.0, "max": -5.0},
-    }
 
     def __init__(
         self,
@@ -149,36 +151,15 @@ class GalacticBinariesOldA(GalacticBinariesOld):
         fk: jax.Array = DEFAULT_FK,
         **kwargs: Any,
     ) -> None:
-        self.alpha: jax.Array = alpha
-        self.beta: jax.Array = beta
-        self.kappa: jax.Array = kappa
-        self.gamma: jax.Array = gamma
-        self.fk: jax.Array = fk
-        super().__init__(**kwargs)
+        frozen = {
+            "alpha": alpha,
+            "beta": beta,
+            "kappa": kappa,
+            "gamma": gamma,
+            "fk": fk,
+        }
+        super().__init__(frozen=frozen, **kwargs)
 
-    def omega_gw_h2(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-    ) -> jax.Array:
-        return super().omega_gw_h2(
-            frequency,
-            log_amplitude,
-            self.alpha,
-            self.beta,
-            self.kappa,
-            self.gamma,
-            self.fk,
-        )
 
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: jax.Array,
-        theta: jax.Array,
-    ) -> jax.Array:
-        """Analytic Jacobian: single column d/d(log_amplitude)."""
-        full_theta = jnp.array(
-            [theta[0], self.alpha, self.beta, self.kappa, self.gamma, self.fk]
-        )
-        J = super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)
-        return J[..., :1]
+# Was a subclass of GalacticBinariesOld; keep ``isinstance`` checks working.
+GalacticBinariesOld.register(GalacticBinariesOldA)

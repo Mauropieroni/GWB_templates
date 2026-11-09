@@ -25,6 +25,7 @@ import jax
 import jax.numpy as jnp
 
 from gwb_templates.generic_templates.power_law import PowerLaw
+from gwb_templates.template import AnalyticTemplate, FrozenParametersMixin
 
 
 class ExtragalacticSobbhBns(PowerLaw):
@@ -118,41 +119,29 @@ class ExtragalacticSobbhBns(PowerLaw):
         frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
-        """
-        Analytic Jacobian: columns [log_amplitude, tilt].
-
-        Delegates the model evaluation to :class:`PowerLaw`'s closed form, called
-        unbound (``PowerLaw.omega_gw_h2(self, ...)``) rather than via ``self`` /
-        ``super()``'s dynamic dispatch, so that :class:`ExtragalacticSobbhBnsA`'s
-        narrower (amplitude-only) ``omega_gw_h2`` override doesn't get invoked here with
-        the wrong arity.
-        """
+        """Analytic Jacobian: columns [log_amplitude, tilt]."""
         log_amplitude, tilt = theta
-        model = PowerLaw.omega_gw_h2(self, frequency, log_amplitude, tilt)
+        model = self.omega_gw_h2(frequency, log_amplitude, tilt)
         d_logA = model * jnp.log(10.0)
         d_tilt = model * jnp.log(frequency / self.ref_freq)
         return jnp.stack([d_logA, d_tilt], axis=-1)
 
 
-class ExtragalacticSobbhBnsA(ExtragalacticSobbhBns):
+class ExtragalacticSobbhBnsA(FrozenParametersMixin, AnalyticTemplate):
     r"""
     Extragalactic SOBBH+BNS foreground with tilt fixed to 2/3.
 
-    Free parameter: ``log_amplitude`` only. Inherits :attr:`bibtex_entries` and the
-    underlying spectral shape from :class:`ExtragalacticSobbhBns`, fixing ``tilt`` to
-    the value passed at construction.
+    Free parameter: ``log_amplitude`` only. :class:`ExtragalacticSobbhBns` with
+    ``tilt`` held fixed to the value passed at construction.
     """
 
     DEFAULT_TILT: ClassVar[jax.Array] = jnp.array(2.0 / 3.0)
 
+    PARENT = ExtragalacticSobbhBns
+    FROZEN: ClassVar[Mapping[str, Any]] = {"tilt": DEFAULT_TILT}
+
     DEFAULT_MODEL_NAME: ClassVar[str] = "sobbh_bns_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Extragalactic SOBBH+BNS (amplitude only)"
-    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
-        "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm EG})$",
-    }
-    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
-        "log_amplitude": {"min": -20.0, "max": -5.0},
-    }
 
     def __init__(
         self,
@@ -160,22 +149,10 @@ class ExtragalacticSobbhBnsA(ExtragalacticSobbhBns):
         tilt: jax.Array = DEFAULT_TILT,
         **kwargs: Any,
     ) -> None:
-        self.tilt: jax.Array = tilt
-        super().__init__(ref_freq=ref_freq, **kwargs)
+        super().__init__(
+            frozen={"tilt": tilt}, parent_kwargs={"ref_freq": ref_freq}, **kwargs
+        )
 
-    def omega_gw_h2(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-    ) -> jax.Array:
-        return super().omega_gw_h2(frequency, log_amplitude, self.tilt)
 
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: jax.Array,
-        theta: jax.Array,
-    ) -> jax.Array:
-        """Analytic Jacobian: single column d/d(log_amplitude)."""
-        full_theta = jnp.array([theta[0], self.tilt])
-        J = super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)
-        return J[..., :1]
+# Was a subclass of ExtragalacticSobbhBns; keep ``isinstance`` checks working.
+ExtragalacticSobbhBns.register(ExtragalacticSobbhBnsA)

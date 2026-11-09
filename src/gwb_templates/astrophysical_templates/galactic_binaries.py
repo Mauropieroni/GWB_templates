@@ -21,7 +21,7 @@ from typing import Any, ClassVar
 import jax
 import jax.numpy as jnp
 
-from gwb_templates.template import AnalyticTemplate
+from gwb_templates.template import AnalyticTemplate, FrozenParametersMixin
 
 
 def galactic_pars(
@@ -161,7 +161,7 @@ class GalacticBinaries(AnalyticTemplate):
         fr2 = 10.0**log_fr2
         u1 = (frequency / fr1) ** alpha
         t = jnp.tanh(-(frequency - frk) / fr2)
-        model = GalacticBinaries.omega_gw_h2(self, frequency, *theta)
+        model = self.omega_gw_h2(frequency, *theta)
         ln10 = jnp.log(10.0)
         d_logA = model * ln10
         d_alpha = model * (-u1 * jnp.log(frequency / fr1))
@@ -174,24 +174,35 @@ class GalacticBinaries(AnalyticTemplate):
         )
 
 
-class GalacticBinariesA(GalacticBinaries):
+def _fiducial_shape(Tobs_yrs: float, snr: float, links: int) -> dict[str, jax.Array]:
+    """Karnesis fiducial cutoff-shape parameters of :class:`GalacticBinaries`."""
+    _, alpha, fr1, frk, fr2 = galactic_pars(Tobs_yrs, snr, links)
+    return {
+        "alpha": alpha,
+        "log_fr1": jnp.log10(fr1),
+        "log_frk": jnp.log10(frk),
+        "log_fr2": jnp.log10(fr2),
+    }
+
+
+class GalacticBinariesA(FrozenParametersMixin, AnalyticTemplate):
     r"""
     Galactic binary foreground — amplitude-only variant.
 
-    Free parameter: ``log_amplitude`` only. Inherits :attr:`bibtex_entries` and the
-    underlying spectral shape from :class:`GalacticBinaries`, fixing ``alpha``,
-    ``log_fr1``, ``log_frk``, ``log_fr2`` at the Karnesis fiducials for ``Tobs_yrs=4``,
-    ``snr=7``, ``links=6`` (or values passed at construction).
+    Free parameter: ``log_amplitude`` only. :class:`GalacticBinaries` with ``tilt``,
+    ``alpha``, ``log_fr1``, ``log_frk``, ``log_fr2`` held fixed at the Karnesis
+    fiducials for ``Tobs_yrs=4``, ``snr=7``, ``links=6`` (or values passed at
+    construction).
     """
+
+    PARENT = GalacticBinaries
+    FROZEN: ClassVar[Mapping[str, Any]] = {
+        "tilt": jnp.array(2.0 / 3.0),
+        **_fiducial_shape(4.0, 7.0, 6),
+    }
 
     DEFAULT_MODEL_NAME: ClassVar[str] = "gb_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Galactic Binaries (amplitude only)"
-    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
-        "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm Gal})$",
-    }
-    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
-        "log_amplitude": {"min": -14.0, "max": -5.0},
-    }
 
     def __init__(
         self,
@@ -206,37 +217,16 @@ class GalacticBinariesA(GalacticBinaries):
         log_fr2: jax.Array | None = None,
         **kwargs: Any,
     ) -> None:
-        _, alpha_fid, fr1_fid, frk_fid, fr2_fid = galactic_pars(Tobs_yrs, snr, links)
-        self.alpha: jax.Array = alpha if alpha is not None else alpha_fid
-        self.log_fr1: jax.Array = log_fr1 if log_fr1 is not None else jnp.log10(fr1_fid)
-        self.log_frk: jax.Array = log_frk if log_frk is not None else jnp.log10(frk_fid)
-        self.tilt: jax.Array = tilt
-        self.log_fr2: jax.Array = log_fr2 if log_fr2 is not None else jnp.log10(fr2_fid)
+        given = {
+            "alpha": alpha,
+            "log_fr1": log_fr1,
+            "log_frk": log_frk,
+            "log_fr2": log_fr2,
+        }
+        fiducial = _fiducial_shape(Tobs_yrs, snr, links)
+        shape = {k: fiducial[k] if v is None else v for k, v in given.items()}
+        super().__init__(frozen={"tilt": tilt, **shape}, **kwargs)
 
-        super().__init__(**kwargs)
 
-    def omega_gw_h2(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-    ) -> jax.Array:
-        return super().omega_gw_h2(
-            frequency,
-            log_amplitude,
-            self.tilt,
-            self.alpha,
-            self.log_fr1,
-            self.log_frk,
-            self.log_fr2,
-        )
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: jax.Array,
-        theta: jax.Array,
-    ) -> jax.Array:
-        """Analytic Jacobian: single column d/d(log_amplitude)."""
-        full_theta = jnp.array(
-            [theta[0], self.tilt, self.alpha, self.log_fr1, self.log_frk, self.log_fr2]
-        )
-        return super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)[:, :1]
+# Was a subclass of GalacticBinaries; keep ``isinstance`` checks working.
+GalacticBinaries.register(GalacticBinariesA)

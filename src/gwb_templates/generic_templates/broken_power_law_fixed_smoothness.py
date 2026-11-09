@@ -22,14 +22,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-import jax
 import jax.numpy as jnp
 
 from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
-from gwb_templates.template import AnalyticTemplate
+from gwb_templates.template import AnalyticTemplate, FrozenParametersMixin
 
 
-class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
+class BrokenPowerLawFixedSmoothness(FrozenParametersMixin, AnalyticTemplate):
     r"""
     Broken power law with fixed transition shape (:math:`\delta = 1`).
 
@@ -63,39 +62,6 @@ class BrokenPowerLawFixedSmoothness(AnalyticTemplate):
     #: TODO: cite
     bibtex_entries: ClassVar[tuple[str, ...]] = ()
 
-    def __init__(self, **kwargs: Any) -> None:
-        # Shape delegate; this class is BrokenPowerLaw with log_transition fixed to 0.
-        self._bpl = BrokenPowerLaw()
-        super().__init__(**kwargs)
-
-    def omega_gw_h2(
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-        log_pivot: jax.Array,
-        tilt_1: jax.Array,
-        tilt_2: jax.Array,
-    ) -> jax.Array:
-        r"""
-        Evaluate the fixed-smoothness broken power law at ``frequency``.
-        """
-        return self._bpl.omega_gw_h2(
-            frequency, log_amplitude, log_pivot, tilt_1, tilt_2, jnp.array(0.0)
-        )
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: jax.Array,
-        theta: jax.Array,
-    ) -> jax.Array:
-        r"""
-        Analytic Jacobian, via :class:`BrokenPowerLaw`'s own Jacobian with
-        ``log_transition = 0`` (the :math:`\partial/\partial\log_{10}\delta` column is
-        dropped, not reweighted).
-        """
-        log_amplitude, log_pivot, tilt_1, tilt_2 = theta
-        theta_bpl = jnp.stack(
-            [log_amplitude, log_pivot, tilt_1, tilt_2, jnp.array(0.0)]
-        )
-        J = self._bpl._grad_theta_omega_gw_h2_analytical(frequency, theta_bpl)
-        return J[..., :4]
+    # This class is BrokenPowerLaw with log_transition fixed to 0.
+    PARENT = BrokenPowerLaw
+    FROZEN: ClassVar[Mapping[str, Any]] = {"log_transition": jnp.array(0.0)}

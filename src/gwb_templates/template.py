@@ -54,6 +54,24 @@ DifferentiationBackend = Literal["autodiff", "finite_difference"]
 jax.config.update("jax_enable_x64", True)
 
 
+def _free_parameter_names(signature: inspect.Signature) -> list[str]:
+    """
+    Model parameter names from an ``omega_gw_h2`` signature that starts at
+    ``frequency`` (i.e. ``self`` already bound or stripped).
+
+    A parameter is "free" if it is positional-only or positional-or-keyword with no
+    default. Keyword-only arguments and arguments with defaults are template
+    configuration, not free parameters.
+    """
+    return [
+        parameter.name
+        for parameter in list(signature.parameters.values())[1:]
+        if parameter.kind
+        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        and parameter.default is inspect.Parameter.empty
+    ]
+
+
 def _check_known_keys(
     candidate: Mapping[str, Any], allowed: tuple[str, ...], label: str
 ) -> None:
@@ -353,29 +371,9 @@ class Template(ABC):
         Infer parameter names from required ``omega_gw_h2`` arguments following
         ``frequency``.
 
-        A parameter is "required" if it is positional-only or positional-or-keyword with
-        no default. Keyword-only arguments and arguments with defaults are treated as
-        template configuration, not free parameters.
+        See :func:`_free_parameter_names` for which arguments count as parameters.
         """
-        signature = inspect.signature(self.omega_gw_h2)
-        signature_params = list(signature.parameters.values())
-
-        if not signature_params:
-            return []
-
-        inferred: list[str] = []
-        for parameter in signature_params[1:]:
-            if (
-                parameter.kind
-                in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                )
-                and parameter.default is inspect.Parameter.empty
-            ):
-                inferred.append(parameter.name)
-
-        return inferred
+        return _free_parameter_names(inspect.signature(self.omega_gw_h2))
 
     def _to_parameter_vector(
         self, parameters: jax.Array | Mapping[str, Any]
@@ -752,6 +750,217 @@ class NumericalTemplate(Template):
         **kwargs: Any,
     ) -> jax.Array:  # pragma: no cover - re-declared for abstractness
         ...
+
+
+# =============================================================================
+# Frozen-parameter variants
+# =============================================================================
+
+
+class FrozenParametersMixin:
+    r"""
+    Build a template from a parent template with some of its parameters held fixed.
+
+    The variant *holds* a parent instance and delegates to it (composition), rather
+    than subclassing the parent and narrowing ``omega_gw_h2``'s arity. A subclass only
+    declares data::
+
+        class Amplitude(FrozenParametersMixin, AnalyticTemplate):
+            PARENT = PowerLaw
+            FROZEN = {"tilt": 0.0}
+
+    From that, this mixin provides:
+
+    * ``omega_gw_h2`` with an explicit signature over the remaining (free) parameters,
+      in the parent's order, so positional and keyword calls both work and the
+      parameter names are inferred as for any other template;
+    * the analytic Jacobian, as the free columns of the parent's own Jacobian (which
+      uses the parent's analytic hook when it has one, autodiff otherwise);
+    * ``DEFAULT_PARAMETER_LABELS`` / ``DEFAULT_PRIOR_BY_PARAM`` inherited from the
+      parent minus the frozen parameters (a subclass's own entries take precedence),
+      and ``bibtex_entries`` / ``jittable`` / ``differentiation_backend`` copied from
+      the parent unless the subclass declares them.
+
+    Each frozen value is an instance attribute of the same name (``model.tilt``), read
+    at call time, so reassigning it changes the spectrum. Defaults come from
+    :attr:`FROZEN`; pass ``frozen={...}`` to override per instance, and
+    ``parent_kwargs={...}`` for the parent's own constructor arguments. Public
+    attributes not found on the variant are looked up on the parent instance.
+
+    List this mixin *before* the template layer in the bases, so its methods take
+    precedence: ``class X(FrozenParametersMixin, AnalyticTemplate)``. The mixin is not
+    a :class:`Template` itself and is never registered.
+    """
+
+    #: Template whose parameters are being (partially) frozen.
+    PARENT: ClassVar[type[Template]]
+
+    #: Frozen parameter names and their default values.
+    FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({})
+
+    # Set by ``_bind_parent``: positions of the free parameters in the parent's order.
+    _free_index: ClassVar[tuple[int, ...]] = ()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        # Bind before ``Template.__init_subclass__`` validates and registers the class,
+        # so it sees the generated ``omega_gw_h2``.
+        if "PARENT" in cls.__dict__:
+            cls._bind_parent()
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def _bind_parent(cls) -> None:
+        parent = cls.PARENT
+        parent_signature = inspect.signature(parent.omega_gw_h2)
+        parent_names = tuple(
+            _free_parameter_names(
+                parent_signature.replace(
+                    parameters=tuple(parent_signature.parameters.values())[1:]
+                )
+            )
+        )
+
+        _check_known_keys(cls.FROZEN, parent_names, f"{cls.__name__}.FROZEN")
+        if not cls.FROZEN:
+            raise TypeError(f"{cls.__name__}.FROZEN must name at least one parameter.")
+        for name in cls.FROZEN:
+            if hasattr(cls, name):
+                raise TypeError(
+                    f"{cls.__name__}: frozen parameter {name!r} would shadow an "
+                    "existing attribute."
+                )
+
+        free_names = tuple(n for n in parent_names if n not in cls.FROZEN)
+        cls._free_index = tuple(parent_names.index(n) for n in free_names)
+
+        # Metadata: parent's, minus frozen parameters, under the subclass's own.
+        for attr in ("DEFAULT_PARAMETER_LABELS", "DEFAULT_PRIOR_BY_PARAM"):
+            inherited = {
+                k: v for k, v in getattr(parent, attr).items() if k not in cls.FROZEN
+            }
+            own = cls.__dict__.get(attr, {})
+            setattr(cls, attr, MappingProxyType({**inherited, **own}))
+        for attr in ("bibtex_entries", "jittable", "differentiation_backend"):
+            if attr not in cls.__dict__:
+                setattr(cls, attr, getattr(parent, attr))
+        # Parent's public class-level constants (e.g. ``DEFAULT_REF_FREQ``), as when
+        # variants inherited from their parent. Data only: methods stay on the parent.
+        for attr in dir(parent):
+            value = inspect.getattr_static(parent, attr)
+            if not (attr.startswith("_") or hasattr(cls, attr) or callable(value)):
+                if not isinstance(value, (property, classmethod, staticmethod)):
+                    setattr(cls, attr, value)
+
+        setattr(cls, "omega_gw_h2", cls._make_omega_gw_h2(parent_names, free_names))
+
+    @classmethod
+    def _make_omega_gw_h2(
+        cls, parent_names: tuple[str, ...], free_names: tuple[str, ...]
+    ) -> Any:
+        kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
+        signature = inspect.Signature(
+            [inspect.Parameter("self", kind)]
+            + [
+                inspect.Parameter(n, kind, annotation="jax.Array")
+                for n in ("frequency", *free_names)
+            ],
+            return_annotation="jax.Array",
+        )
+
+        def omega_gw_h2(self: Any, frequency: jax.Array, *args: Any, **kwargs: Any):
+            if kwargs or len(args) != len(free_names):
+                # Slow path: resolve keywords, report arity errors like a method.
+                bound = signature.bind(self, frequency, *args, **kwargs)
+                args = tuple(bound.arguments[n] for n in free_names)
+            free = iter(args)
+            full = [
+                getattr(self, n) if n in self.FROZEN else next(free)
+                for n in parent_names
+            ]
+            return self._parent.omega_gw_h2(frequency, *full)
+
+        setattr(omega_gw_h2, "__signature__", signature)
+        omega_gw_h2.__qualname__ = f"{cls.__qualname__}.omega_gw_h2"
+        omega_gw_h2.__doc__ = (
+            rf"Evaluate :math:`\Omega_{{\mathrm{{GW}}}} h^2` as "
+            f":class:`{cls.PARENT.__name__}` with "
+            f"{', '.join(f'``{n}``' for n in cls.FROZEN)} held fixed."
+        )
+        return omega_gw_h2
+
+    def __init__(
+        self,
+        *,
+        frozen: Mapping[str, Any] | None = None,
+        parent_kwargs: Mapping[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        overrides = dict(frozen or {})
+        _check_known_keys(overrides, tuple(self.FROZEN), "frozen")
+        self._parent: Template = self.PARENT(**dict(parent_kwargs or {}))
+        for name, value in {**self.FROZEN, **overrides}.items():
+            setattr(self, name, value)
+        super().__init__(**kwargs)
+        self._constructed = True
+
+    def __getattr__(self, name: str) -> Any:
+        # Only reached when normal lookup fails: keep the parent's public attributes
+        # (e.g. ``ref_freq``) reachable, as when variants inherited from their parent.
+        parent = self.__dict__.get("_parent")
+        if parent is not None and not name.startswith("_") and hasattr(parent, name):
+            return getattr(parent, name)
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )
+
+    def __dir__(self) -> list[str]:
+        parent = self.__dict__.get("_parent")
+        inherited = [n for n in dir(parent) if not n.startswith("_")] if parent else []
+        return sorted(set(super().__dir__()) | set(inherited))
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        # Writes go where reads come from: once constructed, a public attribute this
+        # variant does not hold itself is the parent's (e.g. ``model.ref_freq = ...``
+        # must still change the spectrum). During construction everything is local,
+        # as ``Template.__init__`` sets names (``model_name``, ...) the parent has too.
+        if (
+            self.__dict__.get("_constructed", False)
+            and not name.startswith("_")
+            and name not in self.__dict__
+            and not hasattr(type(self), name)
+            and hasattr(self._parent, name)
+        ):
+            setattr(self._parent, name, value)
+        else:
+            object.__setattr__(self, name, value)
+
+    @property
+    def frozen(self) -> Mapping[str, Any]:
+        """Current values of the frozen parameters."""
+        return MappingProxyType({n: getattr(self, n) for n in self.FROZEN})
+
+    def _full_parameter_vector(self, theta: jax.Array) -> jax.Array:
+        """Scatter free parameters back into the parent's full parameter vector."""
+        free = iter(theta)
+        return jnp.stack(
+            [
+                jnp.asarray(getattr(self, n)) if n in self.FROZEN else next(free)
+                for n in self._parent.parameter_names
+            ]
+        )
+
+    def _grad_theta_omega_gw_h2_analytical(
+        self,
+        frequency: jax.Array,
+        theta: jax.Array,
+        *args: Any,
+        **kwargs: Any,
+    ) -> jax.Array:
+        """Analytic Jacobian: the free-parameter columns of the parent's Jacobian."""
+        J = self._parent.grad_theta_omega_gw_h2(
+            frequency, self._full_parameter_vector(theta), *args, **kwargs
+        )
+        return J[..., jnp.asarray(self._free_index, dtype=int)]
 
 
 def get_template_from_registry(name: str, *args: Any, **kwargs: Any) -> Template:

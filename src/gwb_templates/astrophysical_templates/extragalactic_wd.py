@@ -24,7 +24,7 @@ import jax
 import jax.numpy as jnp
 
 from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
-from gwb_templates.template import AnalyticTemplate
+from gwb_templates.template import AnalyticTemplate, FrozenParametersMixin
 
 
 class ExtragalacticWd(AnalyticTemplate):
@@ -140,14 +140,13 @@ class ExtragalacticWd(AnalyticTemplate):
         return jnp.stack([d_logA, d_fknee, d_delta, d_alpha1, d_alpha2], axis=-1)
 
 
-class ExtragalacticWdA(ExtragalacticWd):
+class ExtragalacticWdA(FrozenParametersMixin, AnalyticTemplate):
     r"""
     Extragalactic WD-binary foreground — amplitude-only variant.
 
-    Free parameter: ``log_amplitude`` only. Inherits :attr:`bibtex_entries` and the
-    underlying spectral shape from :class:`ExtragalacticWd`, fixing ``f_knee``,
-    ``delta``, ``alpha1``, ``alpha2`` at the fiducial values from arXiv:2506.18390 (or
-    values passed at construction).
+    Free parameter: ``log_amplitude`` only. :class:`ExtragalacticWd` with ``f_knee``,
+    ``delta``, ``alpha1``, ``alpha2`` held fixed at the fiducial values from
+    arXiv:2506.18390 (or values passed at construction).
     """
 
     DEFAULT_F_KNEE: ClassVar[jax.Array] = jnp.array(7e-3)
@@ -155,14 +154,16 @@ class ExtragalacticWdA(ExtragalacticWd):
     DEFAULT_ALPHA1: ClassVar[jax.Array] = jnp.array(-0.72)
     DEFAULT_ALPHA2: ClassVar[jax.Array] = jnp.array(2.43)
 
+    PARENT = ExtragalacticWd
+    FROZEN: ClassVar[Mapping[str, Any]] = {
+        "f_knee": DEFAULT_F_KNEE,
+        "delta": DEFAULT_DELTA,
+        "alpha1": DEFAULT_ALPHA1,
+        "alpha2": DEFAULT_ALPHA2,
+    }
+
     DEFAULT_MODEL_NAME: ClassVar[str] = "ewd_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Extragalactic WD Binaries (amplitude only)"
-    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
-        "log_amplitude": r"$\log_{10}(h^2\,\Omega_{\rm EWD})$",
-    }
-    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
-        "log_amplitude": {"min": -20.0, "max": -5.0},
-    }
 
     def __init__(
         self,
@@ -172,30 +173,9 @@ class ExtragalacticWdA(ExtragalacticWd):
         alpha2: jax.Array = DEFAULT_ALPHA2,
         **kwargs: Any,
     ) -> None:
-        self.f_knee: jax.Array = f_knee
-        self.delta: jax.Array = delta
-        self.alpha1: jax.Array = alpha1
-        self.alpha2: jax.Array = alpha2
+        frozen = {"f_knee": f_knee, "delta": delta, "alpha1": alpha1, "alpha2": alpha2}
+        super().__init__(frozen=frozen, **kwargs)
 
-        super().__init__(**kwargs)
 
-    def omega_gw_h2(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self,
-        frequency: jax.Array,
-        log_amplitude: jax.Array,
-    ) -> jax.Array:
-        return super().omega_gw_h2(
-            frequency, log_amplitude, self.f_knee, self.delta, self.alpha1, self.alpha2
-        )
-
-    def _grad_theta_omega_gw_h2_analytical(
-        self,
-        frequency: jax.Array,
-        theta: jax.Array,
-    ) -> jax.Array:
-        """Analytic Jacobian: single column d/d(log_amplitude)."""
-        full_theta = jnp.array(
-            [theta[0], self.f_knee, self.delta, self.alpha1, self.alpha2]
-        )
-        J = super()._grad_theta_omega_gw_h2_analytical(frequency, full_theta)
-        return J[..., :1]
+# Was a subclass of ExtragalacticWd; keep ``isinstance`` checks working.
+ExtragalacticWd.register(ExtragalacticWdA)
