@@ -214,27 +214,15 @@ class ExtragalacticWd2A(FrozenParametersMixin, AnalyticTemplate):
         "Extragalactic WD Binaries alt. (amplitude only)"
     )
 
-    def __init__(
-        self,
-        f_low: jax.Array = DEFAULT_F_LOW,
-        f_high: jax.Array = DEFAULT_F_HIGH,
-        alpha_low: jax.Array = DEFAULT_ALPHA_LOW,
-        alpha_high: jax.Array = DEFAULT_ALPHA_HIGH,
-        f0: jax.Array = ExtragalacticWd2.DEFAULT_F0,
-        mid_slope: jax.Array = ExtragalacticWd2.DEFAULT_MID_SLOPE,
-        delta: jax.Array = ExtragalacticWd2.DEFAULT_DELTA,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            frozen={
-                "f_low": f_low,
-                "f_high": f_high,
-                "alpha_low": alpha_low,
-                "alpha_high": alpha_high,
-            },
-            parent_kwargs={"f0": f0, "mid_slope": mid_slope, "delta": delta},
-            **kwargs,
-        )
+    _POSITIONAL_ARGS = (
+        "f_low",
+        "f_high",
+        "alpha_low",
+        "alpha_high",
+        "f0",
+        "mid_slope",
+        "delta",
+    )  # deprecated
 
 
 # Was a subclass of ExtragalacticWd2; keep ``isinstance`` checks working.

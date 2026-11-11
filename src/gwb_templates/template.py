@@ -29,6 +29,7 @@ Design notes:
 from __future__ import annotations
 
 import inspect
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -757,6 +758,15 @@ class NumericalTemplate(Template):
 # =============================================================================
 
 
+def _warn_parent_attribute(variant: Any, name: str) -> None:
+    warnings.warn(
+        f"Accessing {name!r} through {type(variant).__name__} is deprecated and will "
+        f"be removed in the next release; use `.parent.{name}` instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+
+
 class FrozenParametersMixin:
     r"""
     Build a template from a parent template with some of its parameters held fixed.
@@ -782,10 +792,16 @@ class FrozenParametersMixin:
       the parent unless the subclass declares them.
 
     Each frozen value is an instance attribute of the same name (``model.tilt``), read
-    at call time, so reassigning it changes the spectrum. Defaults come from
-    :attr:`FROZEN`; pass ``frozen={...}`` to override per instance, and
-    ``parent_kwargs={...}`` for the parent's own constructor arguments. Public
-    attributes not found on the variant are looked up on the parent instance.
+    at call time, so reassigning it changes the spectrum. The constructor takes
+    keywords only and routes each one by name: a frozen parameter overrides its
+    :attr:`FROZEN` default, an argument of ``PARENT.__init__`` configures the parent
+    instance (available as :attr:`parent`), and anything else goes to
+    :class:`Template`. For example ``ExtragalacticSobbhBnsA(tilt=1.0, ref_freq=1e-2)``.
+
+    Deprecated, to be removed in the next release: positional constructor arguments
+    (in the order :attr:`_POSITIONAL_ARGS`), and reading or writing the parent's
+    public attributes through the variant (``model.ref_freq``); use
+    ``model.parent.ref_freq`` instead.
 
     List this mixin *before* the template layer in the bases, so its methods take
     precedence: ``class X(FrozenParametersMixin, AnalyticTemplate)``. The mixin is not
@@ -798,8 +814,13 @@ class FrozenParametersMixin:
     #: Frozen parameter names and their default values.
     FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({})
 
-    # Set by ``_bind_parent``: positions of the free parameters in the parent's order.
+    #: Deprecated legacy order of positional constructor arguments.
+    _POSITIONAL_ARGS: ClassVar[tuple[str, ...]] = ()
+
+    # Set by ``_bind_parent``: positions of the free parameters in the parent's order,
+    # and the parent's own constructor arguments (routed to the parent instance).
     _free_index: ClassVar[tuple[int, ...]] = ()
+    _parent_init_names: ClassVar[tuple[str, ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Bind before ``Template.__init_subclass__`` validates and registers the class,
@@ -832,6 +853,12 @@ class FrozenParametersMixin:
 
         free_names = tuple(n for n in parent_names if n not in cls.FROZEN)
         cls._free_index = tuple(parent_names.index(n) for n in free_names)
+        template_init = inspect.signature(Template.__init__).parameters
+        cls._parent_init_names = tuple(
+            n
+            for n, p in inspect.signature(parent.__init__).parameters.items()
+            if n != "self" and n not in template_init and p.kind is not p.VAR_KEYWORD
+        )
 
         # Metadata: parent's, minus frozen parameters, under the subclass's own.
         for attr in ("DEFAULT_PARAMETER_LABELS", "DEFAULT_PRIOR_BY_PARAM"):
@@ -888,26 +915,53 @@ class FrozenParametersMixin:
         )
         return omega_gw_h2
 
-    def __init__(
-        self,
-        *,
-        frozen: Mapping[str, Any] | None = None,
-        parent_kwargs: Mapping[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> None:
-        overrides = dict(frozen or {})
-        _check_known_keys(overrides, tuple(self.FROZEN), "frozen")
-        self._parent: Template = self.PARENT(**dict(parent_kwargs or {}))
-        for name, value in {**self.FROZEN, **overrides}.items():
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            kwargs = self._legacy_positional(args, kwargs)
+        frozen = {n: kwargs.pop(n) for n in self.FROZEN if n in kwargs}
+        parent_kwargs = {
+            n: kwargs.pop(n) for n in self._parent_init_names if n in kwargs
+        }
+        self._parent: Template = self.PARENT(**parent_kwargs)
+        for name, value in {**self.FROZEN, **frozen}.items():
             setattr(self, name, value)
         super().__init__(**kwargs)
         self._constructed = True
 
+    def _legacy_positional(
+        self, args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> dict[str, Any]:
+        # Deprecated: map positional arguments to keywords in the old order.
+        cls_name = type(self).__name__
+        names = self._POSITIONAL_ARGS
+        if len(args) > len(names):
+            raise TypeError(
+                f"{cls_name}() takes {len(names)} positional arguments but "
+                f"{len(args)} were given"
+            )
+        given = names[: len(args)]
+        for name in given:
+            if name in kwargs:
+                raise TypeError(f"{cls_name}() got multiple values for {name!r}")
+        warnings.warn(
+            f"Passing {', '.join(given)} positionally to {cls_name}() is deprecated "
+            "and will be removed in the next release; pass them as keywords.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return {**kwargs, **dict(zip(given, args))}
+
+    @property
+    def parent(self) -> Template:
+        """The :attr:`PARENT` instance this variant evaluates."""
+        return self._parent
+
     def __getattr__(self, name: str) -> Any:
-        # Only reached when normal lookup fails: keep the parent's public attributes
-        # (e.g. ``ref_freq``) reachable, as when variants inherited from their parent.
+        # Only reached when normal lookup fails. Deprecated: the parent's public
+        # attributes (e.g. ``ref_freq``) used to be inherited; use ``model.parent``.
         parent = self.__dict__.get("_parent")
         if parent is not None and not name.startswith("_") and hasattr(parent, name):
+            _warn_parent_attribute(self, name)
             return getattr(parent, name)
         raise AttributeError(
             f"{type(self).__name__!r} object has no attribute {name!r}"
@@ -923,6 +977,8 @@ class FrozenParametersMixin:
         # variant does not hold itself is the parent's (e.g. ``model.ref_freq = ...``
         # must still change the spectrum). During construction everything is local,
         # as ``Template.__init__`` sets names (``model_name``, ...) the parent has too.
+        # Deprecated with the read path. When it is removed, keep a guard that raises
+        # here instead, so such a write cannot silently stop affecting the spectrum.
         if (
             self.__dict__.get("_constructed", False)
             and not name.startswith("_")
@@ -930,6 +986,7 @@ class FrozenParametersMixin:
             and not hasattr(type(self), name)
             and hasattr(self._parent, name)
         ):
+            _warn_parent_attribute(self, name)
             setattr(self._parent, name, value)
         else:
             object.__setattr__(self, name, value)

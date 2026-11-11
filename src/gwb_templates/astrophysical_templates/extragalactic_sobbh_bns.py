@@ -143,15 +143,7 @@ class ExtragalacticSobbhBnsA(FrozenParametersMixin, AnalyticTemplate):
     DEFAULT_MODEL_NAME: ClassVar[str] = "sobbh_bns_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Extragalactic SOBBH+BNS (amplitude only)"
 
-    def __init__(
-        self,
-        ref_freq: jax.Array = ExtragalacticSobbhBns.DEFAULT_REF_FREQ,
-        tilt: jax.Array = DEFAULT_TILT,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            frozen={"tilt": tilt}, parent_kwargs={"ref_freq": ref_freq}, **kwargs
-        )
+    _POSITIONAL_ARGS = ("ref_freq", "tilt")  # deprecated
 
 
 # Was a subclass of ExtragalacticSobbhBns; keep ``isinstance`` checks working.

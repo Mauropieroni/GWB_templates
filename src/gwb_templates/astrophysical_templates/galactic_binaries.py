@@ -205,27 +205,14 @@ class GalacticBinariesA(FrozenParametersMixin, AnalyticTemplate):
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Galactic Binaries (amplitude only)"
 
     def __init__(
-        self,
-        Tobs_yrs: float = 4.0,
-        snr: float = 7.0,
-        links: int = 6,
-        *,
-        tilt: jax.Array = jnp.array(2.0 / 3.0),
-        alpha: jax.Array | None = None,
-        log_fr1: jax.Array | None = None,
-        log_frk: jax.Array | None = None,
-        log_fr2: jax.Array | None = None,
-        **kwargs: Any,
+        self, Tobs_yrs: float = 4.0, snr: float = 7.0, links: int = 6, **kwargs: Any
     ) -> None:
-        given = {
-            "alpha": alpha,
-            "log_fr1": log_fr1,
-            "log_frk": log_frk,
-            "log_fr2": log_fr2,
-        }
-        fiducial = _fiducial_shape(Tobs_yrs, snr, links)
-        shape = {k: fiducial[k] if v is None else v for k, v in given.items()}
-        super().__init__(frozen={"tilt": tilt, **shape}, **kwargs)
+        # Shape parameters not given (or given as None) take the Karnesis fiducials
+        # for this observing setup; any other keyword is routed by the mixin.
+        for name, value in _fiducial_shape(Tobs_yrs, snr, links).items():
+            if kwargs.get(name) is None:
+                kwargs[name] = value
+        super().__init__(**kwargs)
 
 
 # Was a subclass of GalacticBinaries; keep ``isinstance`` checks working.

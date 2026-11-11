@@ -165,16 +165,7 @@ class ExtragalacticWdA(FrozenParametersMixin, AnalyticTemplate):
     DEFAULT_MODEL_NAME: ClassVar[str] = "ewd_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Extragalactic WD Binaries (amplitude only)"
 
-    def __init__(
-        self,
-        f_knee: jax.Array = DEFAULT_F_KNEE,
-        delta: jax.Array = DEFAULT_DELTA,
-        alpha1: jax.Array = DEFAULT_ALPHA1,
-        alpha2: jax.Array = DEFAULT_ALPHA2,
-        **kwargs: Any,
-    ) -> None:
-        frozen = {"f_knee": f_knee, "delta": delta, "alpha1": alpha1, "alpha2": alpha2}
-        super().__init__(frozen=frozen, **kwargs)
+    _POSITIONAL_ARGS = ("f_knee", "delta", "alpha1", "alpha2")  # deprecated
 
 
 # Was a subclass of ExtragalacticWd; keep ``isinstance`` checks working.

@@ -142,23 +142,7 @@ class GalacticBinariesOldA(FrozenParametersMixin, AnalyticTemplate):
     DEFAULT_MODEL_NAME: ClassVar[str] = "gb_old_a"
     DEFAULT_MODEL_LABEL: ClassVar[str] = "Galactic Binaries old (amplitude only)"
 
-    def __init__(
-        self,
-        alpha: jax.Array = DEFAULT_ALPHA,
-        beta: jax.Array = DEFAULT_BETA,
-        kappa: jax.Array = DEFAULT_KAPPA,
-        gamma: jax.Array = DEFAULT_GAMMA,
-        fk: jax.Array = DEFAULT_FK,
-        **kwargs: Any,
-    ) -> None:
-        frozen = {
-            "alpha": alpha,
-            "beta": beta,
-            "kappa": kappa,
-            "gamma": gamma,
-            "fk": fk,
-        }
-        super().__init__(frozen=frozen, **kwargs)
+    _POSITIONAL_ARGS = ("alpha", "beta", "kappa", "gamma", "fk")  # deprecated
 
 
 # Was a subclass of GalacticBinariesOld; keep ``isinstance`` checks working.
