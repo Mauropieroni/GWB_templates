@@ -107,8 +107,17 @@ class ExtragalacticSobbhBns(PowerLaw):
         ref_freq: jax.Array = DEFAULT_REF_FREQ,
         **kwargs: Any,
     ) -> None:
-        self.ref_freq: jax.Array = ref_freq
         super().__init__(pivot=ref_freq, **kwargs)
+
+    @property
+    def ref_freq(self) -> jax.Array:
+        """Reference frequency in Hz: an alias of :attr:`pivot`, which the spectrum
+        uses, so the two cannot get out of sync."""
+        return self.pivot
+
+    @ref_freq.setter
+    def ref_freq(self, value: jax.Array) -> None:
+        self.pivot = value
 
     # omega_gw_h2 is inherited unchanged from PowerLaw: the closed form here is exactly
     # 10**log_amplitude * (f/ref_freq)**tilt, i.e. PowerLaw's formula with

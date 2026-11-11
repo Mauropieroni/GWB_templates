@@ -164,8 +164,8 @@ class TestFrozenParametersBehaviour(unittest.TestCase):
             self.assertEqual(float(model.ref_freq), 1e-2)
         before = model.omega_gw_h2(fvec, -10.0)
         with self.assertWarns(DeprecationWarning):
-            model.pivot = jnp.array(2e-2)  # the attribute the spectrum reads
-        self.assertEqual(float(model.parent.pivot), 2e-2)
+            model.ref_freq = jnp.array(2e-2)
+        self.assertEqual(float(model.parent.ref_freq), 2e-2)
         self.assertFalse(np.array_equal(before, model.omega_gw_h2(fvec, -10.0)))
         self.assertIn("ref_freq", dir(model))
         self.assertTrue(hasattr(ExtragalacticSobbhBnsA, "DEFAULT_REF_FREQ"))
