@@ -6,5 +6,3 @@ build/
 dist/
 **/.vscode/
 **/.DS_Store
-/interpolate_vgw_spectrum_jax.ipynb
-/parity_sigw.ipynb

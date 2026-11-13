@@ -16,40 +16,14 @@ _ARCHIVE_PATH = Path(__file__).with_name("VGW_output.npz")
 jax.config.update("jax_enable_x64", True)
 
 
-def _endpoint_slope(log_x: np.ndarray, log_y: np.ndarray) -> np.ndarray:
-    """
-    Estimate a log-log power-law slope along the last axis.
-
-    The slope is obtained by a least-squares fit of ``log_y`` against
-    ``log_x`` after centering both arrays.
-
-    Parameters
-    ----------
-    log_x : numpy.ndarray
-        One-dimensional log-transformed coordinates used as the independent
-        variable.
-    log_y : numpy.ndarray
-        Log-transformed values. Its last axis must have the same length as
-        ``log_x``.
-
-    Returns
-    -------
-    numpy.ndarray
-        The fitted slope for each leading index of ``log_y``.
-    """
-    x_centered = log_x - np.mean(log_x)
-    y_centered = log_y - np.mean(log_y, axis=-1, keepdims=True)
-    return np.sum(x_centered * y_centered, axis=-1) / np.sum(x_centered**2)
-
-
 def _load_archive(path: Path) -> tuple[np.ndarray, ...]:
     """
     Load and preprocess the tabulated spectrum using NumPy.
 
     The archive contains four signed spectrum components tabulated on an
     ``n2`` by frequency grid. The component magnitudes are converted to
-    base-10 logarithms for interpolation, while their signs and endpoint
-    power-law slopes are retained separately for extrapolation.
+    base-10 logarithms for interpolation, while their signs are retained
+    separately.
 
     Parameters
     ----------
@@ -61,8 +35,7 @@ def _load_archive(path: Path) -> tuple[np.ndarray, ...]:
     -------
     tuple[numpy.ndarray, ...]
         The log-frequency grid, ``n2`` grid, log-magnitude component values,
-        component signs, infrared slopes, ultraviolet slopes, ultraviolet
-        log-frequency start, and ultraviolet starting values, in that order.
+        and component signs, in that order.
 
     Raises
     ------
@@ -95,18 +68,11 @@ def _load_archive(path: Path) -> tuple[np.ndarray, ...]:
         raise ValueError("A component changes sign: log|Omega| cannot be used")
     log_f_grid = np.log10(f_grid)
     log_values = np.log10(np.abs(values))
-    uv_start = max(0, len(log_f_grid) - 12)
-    ir_slopes = _endpoint_slope(log_f_grid[:3], log_values[:, :, :3])
-    uv_slopes = _endpoint_slope(log_f_grid[uv_start:], log_values[:, :, uv_start:])
     return (
         log_f_grid,
         n2_grid,
         log_values,
         signs,
-        ir_slopes,
-        uv_slopes,
-        np.asarray(log_f_grid[uv_start]),
-        np.asarray(log_values[:, :, uv_start]),
     )
 
 
@@ -115,10 +81,6 @@ def _load_archive(path: Path) -> tuple[np.ndarray, ...]:
     _N2_GRID,
     _LOG_VALUES,
     _SIGNS,
-    _IR_SLOPES,
-    _UV_SLOPES,
-    _UV_LOG_F_START,
-    _UV_LOG_VALUES_START,
 ) = _load_archive(_ARCHIVE_PATH)
 FREQUENCY_RANGE = (_LOG_F_GRID[0], _LOG_F_GRID[-1])
 N2_RANGE = (_N2_GRID[0], _N2_GRID[-1])
@@ -128,17 +90,10 @@ _JAX_LOG_F_GRID = jnp.asarray(_LOG_F_GRID, dtype=jnp.float64)
 _JAX_N2_GRID = jnp.asarray(_N2_GRID, dtype=jnp.float64)
 _JAX_LOG_VALUES = jnp.asarray(_LOG_VALUES, dtype=jnp.float64)
 _JAX_SIGNS = jnp.asarray(_SIGNS, dtype=jnp.float64)
-_JAX_IR_SLOPES = jnp.asarray(_IR_SLOPES, dtype=jnp.float64)
-_JAX_UV_SLOPES = jnp.asarray(_UV_SLOPES, dtype=jnp.float64)
-_JAX_UV_LOG_F_START = jnp.asarray(_UV_LOG_F_START, dtype=jnp.float64)
-_JAX_UV_LOG_VALUES_START = jnp.asarray(_UV_LOG_VALUES_START, dtype=jnp.float64)
 
 
 def _interpolate_component_jax(
     log_values: jax.Array,
-    ir_slopes: jax.Array,
-    uv_slopes: jax.Array,
-    uv_log_values_start: jax.Array,
     target_frequencies: jax.Array,
     target_f_peak: float,
     target_n2: float,
@@ -146,24 +101,14 @@ def _interpolate_component_jax(
     """
     Interpolate one spectrum component in log-frequency and ``n2``.
 
-    Frequencies inside the archive range are interpolated linearly in
-    ``log10(f)`` and then in ``n2``. Frequencies below the archive range use
-    the infrared endpoint slope; frequencies at or above the ultraviolet
-    threshold use the ultraviolet endpoint slope. The returned values are
-    still logarithms of component magnitudes; the component sign is restored
-    by :func:`interpolate_components_jax`.
+    Frequencies are interpolated linearly in ``log10(f)`` and then in ``n2``.
+    The returned values are still logarithms of component magnitudes; the
+    component sign is restored by :func:`interpolate_components_jax`.
 
     Parameters
     ----------
     log_values : jax.Array
         Log10 magnitudes with shape ``(n2, n_frequency_grid)``.
-    ir_slopes : jax.Array
-        Infrared slopes with one value for each ``n2`` grid point.
-    uv_slopes : jax.Array
-        Ultraviolet slopes with one value for each ``n2`` grid point.
-    uv_log_values_start : jax.Array
-        Log10 magnitudes at the start of the ultraviolet extrapolation, with
-        shape ``(n2,)``.
     target_frequencies : jax.Array
         Positive target frequencies in Hz, with shape ``(n_frequency,)``.
     target_f_peak : float
@@ -183,18 +128,6 @@ def _interpolate_component_jax(
         return jnp.interp(log_target_f, _JAX_LOG_F_GRID, log_values_at_n2)
 
     log_value_by_n2 = jax.vmap(interpolate_at_n2)(log_values)
-    ir_value = log_values[:, 0, None] + ir_slopes[:, None] * (
-        log_target_f[None, :] - _JAX_LOG_F_GRID[0]
-    )
-    uv_value = uv_log_values_start[:, None] + uv_slopes[:, None] * (
-        log_target_f[None, :] - _JAX_UV_LOG_F_START
-    )
-    log_value_by_n2 = jnp.where(
-        log_target_f[None, :] < _JAX_LOG_F_GRID[0], ir_value, log_value_by_n2
-    )
-    log_value_by_n2 = jnp.where(
-        log_target_f[None, :] >= _JAX_UV_LOG_F_START, uv_value, log_value_by_n2
-    )
     return jax.vmap(
         lambda values_at_frequency: jnp.interp(
             target_n2,
@@ -214,8 +147,7 @@ def interpolate_components_jax(
     """
     Return the four unnormalised interpolated spectrum components.
 
-    The four components are evaluated using the archive tables and the
-    endpoint extrapolation rules implemented by
+    The four components are evaluated using the archive tables by
     :func:`_interpolate_component_jax`. Their original signs are restored
     after interpolation. Values outside the supported ``n2`` range are zero.
     No amplitude or non-Gaussianity normalization is applied here.
@@ -239,12 +171,9 @@ def interpolate_components_jax(
     flat_frequencies = jnp.ravel(target_frequencies)
     log_components = jax.vmap(
         _interpolate_component_jax,
-        in_axes=(0, 0, 0, 0, None, None, None),
+        in_axes=(0, None, None, None),
     )(
         _JAX_LOG_VALUES,
-        _JAX_IR_SLOPES,
-        _JAX_UV_SLOPES,
-        _JAX_UV_LOG_VALUES_START,
         flat_frequencies,
         target_f_peak,
         target_n2,
