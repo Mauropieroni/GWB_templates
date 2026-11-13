@@ -1,41 +1,32 @@
 r"""
-Bubble-collision contribution to the GW spectrum from a cosmological
-first-order phase transition.
+Bubble-collision contribution to the GW spectrum from a cosmological first-order phase
+transition.
 
 Based on:
 
-M. Lewicki and V. Vaskonen,
-"Gravitational waves from bubble collisions and fluid motion in
-strongly supercooled phase transitions",
-Eur.Phys.J. C83 (2023) 2, 109; [arXiv:2208.11697 [astro-ph.CO]].
+M. Lewicki and V. Vaskonen, "Gravitational waves from bubble collisions and fluid motion
+in strongly supercooled phase transitions", Eur.Phys.J. C83 (2023) 2, 109;
+[arXiv:2208.11697 [astro-ph.CO]].
 
-The spectral shape is fixed to the U(1)-symmetric scalar field scenario
-(A=0.05, omega_p/beta=0.7, a=b=2.4, c=4.0).
+The spectral shape is fixed to the U(1)-symmetric scalar field scenario (A=0.05,
+omega_p/beta=0.7, a=b=2.4, c=4.0).
 
-Also see: R. Jinno and M. Takimoto, "Gravitational waves from bubble
-collisions: An analytic derivation", Phys.Rev.D 95 (2017) 024009;
-[arXiv:1605.01403 [astro-ph.CO]] (original analytic bubble-collision
-derivation).
+Also see: R. Jinno and M. Takimoto, "Gravitational waves from bubble collisions: An
+analytic derivation", Phys.Rev.D 95 (2017) 024009; [arXiv:1605.01403 [astro-ph.CO]]
+(original analytic bubble-collision derivation).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
-from gwb_templates.FOPT_templates.pt_base import (
-    a_hubble,
-    broken_power_law_a1,
-    jac_broken_power_law_a1_amp_freq,
-    redshift_omega,
-)
+from gwb_templates.FOPT_templates.pt_base import a_hubble, redshift_omega
+from gwb_templates.generic_templates.broken_power_law_a1 import BrokenPowerLawA1
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 def _build_collision_constants() -> tuple[float, float, float, float, float]:
@@ -73,11 +64,10 @@ class PtCollision(AnalyticTemplate):
     Free parameters
     ---------------
     log_K_tilde
-        :math:`\log_{10}` of the vacuum-to-kinetic-energy conversion
-        fraction.
+        :math:`\log_{10}` of the vacuum-to-kinetic-energy conversion fraction.
     log_beta_over_H
-        :math:`\log_{10}` of :math:`\beta/H_*` (inverse transition
-        duration in Hubble units).
+        :math:`\log_{10}` of :math:`\beta/H_*` (inverse transition duration in Hubble
+        units).
     log_T_star
         :math:`\log_{10}` of the transition temperature in GeV.
 
@@ -102,11 +92,24 @@ class PtCollision(AnalyticTemplate):
     """
 
     #: Defaults for fixed spectral-shape constants (U(1)-symmetric scalar scenario).
-    DEFAULT_A_B: ClassVar[float] = _A_B
-    DEFAULT_OMEGA_B_OVER_BETA: ClassVar[float] = _OMEGA_B_OVER_BETA
-    DEFAULT_SPECTRAL_INDEX_IR: ClassVar[float] = _N_1
-    DEFAULT_SPECTRAL_INDEX_UV: ClassVar[float] = _N_2
-    DEFAULT_TRANSITION_SMOOTHNESS: ClassVar[float] = _A_1
+    DEFAULT_A_B: ClassVar[jax.Array] = jnp.array(_A_B)
+    DEFAULT_OMEGA_B_OVER_BETA: ClassVar[jax.Array] = jnp.array(_OMEGA_B_OVER_BETA)
+    DEFAULT_SPECTRAL_INDEX_IR: ClassVar[jax.Array] = jnp.array(_N_1)
+    DEFAULT_SPECTRAL_INDEX_UV: ClassVar[jax.Array] = jnp.array(_N_2)
+    DEFAULT_TRANSITION_SMOOTHNESS: ClassVar[jax.Array] = jnp.array(_A_1)
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "pt_collision"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "PT Bubble Collisions"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_K_tilde": r"$\log_{10}\tilde{K}$",
+        "log_beta_over_H": r"$\log_{10}(\beta/H_*)$",
+        "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_K_tilde": {"min": -4.0, "max": 0.0},
+        "log_beta_over_H": {"min": 0.0, "max": 4.0},
+        "log_T_star": {"min": -2.0, "max": 4.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -145,53 +148,30 @@ class PtCollision(AnalyticTemplate):
 
     def __init__(
         self,
-        a_b: float = DEFAULT_A_B,
-        omega_b_over_beta: float = DEFAULT_OMEGA_B_OVER_BETA,
-        spectral_index_IR: float = DEFAULT_SPECTRAL_INDEX_IR,
-        spectral_index_UV: float = DEFAULT_SPECTRAL_INDEX_UV,
-        transition_smoothness: float = DEFAULT_TRANSITION_SMOOTHNESS,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
+        a_b: jax.Array = DEFAULT_A_B,
+        omega_b_over_beta: jax.Array = DEFAULT_OMEGA_B_OVER_BETA,
+        spectral_index_IR: jax.Array = DEFAULT_SPECTRAL_INDEX_IR,
+        spectral_index_UV: jax.Array = DEFAULT_SPECTRAL_INDEX_UV,
+        transition_smoothness: jax.Array = DEFAULT_TRANSITION_SMOOTHNESS,
+        **kwargs: Any,
     ) -> None:
-        self.a_b: float = float(a_b)
-        self.omega_b_over_beta: float = float(omega_b_over_beta)
-        self.spectral_index_IR: float = float(spectral_index_IR)
-        self.spectral_index_UV: float = float(spectral_index_UV)
-        self.transition_smoothness: float = float(transition_smoothness)
+        self.a_b: jax.Array = a_b
+        self.omega_b_over_beta: jax.Array = omega_b_over_beta
+        self.spectral_index_IR: jax.Array = spectral_index_IR
+        self.spectral_index_UV: jax.Array = spectral_index_UV
+        self.transition_smoothness: jax.Array = transition_smoothness
+        # Spectral shape; the physics-level prefactors above feed its amplitude and
+        # break-frequency arguments.
+        self._bpl_a1 = BrokenPowerLawA1()
 
-        default_labels = {
-            "log_K_tilde": r"$\log_{10}\tilde{K}$",
-            "log_beta_over_H": r"$\log_{10}(\beta/H_*)$",
-            "log_T_star": r"$\log_{10}(T_*/\mathrm{GeV})$",
-        }
-        default_priors = {
-            "log_K_tilde": {"min": -4.0, "max": 0.0},
-            "log_beta_over_H": {"min": 0.0, "max": 4.0},
-            "log_T_star": {"min": -2.0, "max": 4.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label if model_label is not None else "PT Bubble Collisions"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_K_tilde: ArrayLike,
-        log_beta_over_H: ArrayLike,
-        log_T_star: ArrayLike,
+        frequency: jax.Array,
+        log_K_tilde: jax.Array,
+        log_beta_over_H: jax.Array,
+        log_T_star: jax.Array,
     ) -> jax.Array:
         r"""Evaluate the bubble-collision FOPT spectrum at ``frequency``."""
         K_tilde = 10.0**log_K_tilde
@@ -204,7 +184,7 @@ class PtCollision(AnalyticTemplate):
         aH_star = a_hubble(T_star)
         f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
-        return broken_power_law_a1(
+        return self._bpl_a1.omega_gw_h2(
             frequency,
             jnp.log10(h2Omega_b),
             jnp.log10(f_b),
@@ -222,10 +202,9 @@ class PtCollision(AnalyticTemplate):
         Analytic Jacobian of the bubble-collision FOPT spectrum w.r.t.
         ``(log_K_tilde, log_beta_over_H, log_T_star)``.
 
-        Uses the chain rule through :func:`broken_power_law_a1`.  The
-        :math:`g_*` tables are piecewise-constant, so their T-derivatives
-        vanish almost everywhere (consistent with autodiff through
-        :func:`jnp.select`).
+        Uses the chain rule through the held :class:`BrokenPowerLawA1` sub-template. The
+        :math:`g_*` tables are piecewise-constant, so their T-derivatives vanish almost
+        everywhere (consistent with autodiff through :func:`jnp.select`).
         """
         log_K_tilde, log_beta_over_H, log_T_star = theta[0], theta[1], theta[2]
 
@@ -238,16 +217,21 @@ class PtCollision(AnalyticTemplate):
         aH_star = a_hubble(T_star)
         f_b = aH_star / (2.0 * jnp.pi) * beta_over_H * self.omega_b_over_beta
 
-        # Partials of broken_power_law_a1 w.r.t. (log_amplitude, log_f_b):
-        # shape (..., 2)
-        J_inner = jac_broken_power_law_a1_amp_freq(
-            frequency,
-            jnp.log10(h2Omega_b),
-            jnp.log10(f_b),
-            self.spectral_index_IR,
-            self.spectral_index_UV,
-            self.transition_smoothness,
+        # Partials of BrokenPowerLawA1.omega_gw_h2 w.r.t. its 5 parameters; we only
+        # need the (log_amplitude, log_f_b) columns.
+        theta_bpl = jnp.stack(
+            [
+                jnp.log10(h2Omega_b),
+                jnp.log10(f_b),
+                self.spectral_index_IR,
+                self.spectral_index_UV,
+                self.transition_smoothness,
+            ]
         )
+        J_full = self._bpl_a1._grad_theta_omega_gw_h2_analytical(
+            frequency, theta_bpl
+        )  # shape (..., 5)
+        J_inner = J_full[..., :2]  # shape (..., 2)
 
         # d([log_h2Omega_b, log_f_b])
         #     / d([log_K_tilde, log_beta_over_H, log_T_star])

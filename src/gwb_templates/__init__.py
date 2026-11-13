@@ -31,7 +31,6 @@ from gwb_templates.generic_templates import two_double_broken_power_laws  # noqa
 # ── First-order phase transitions ─────────────────────────────────────────────
 from gwb_templates.FOPT_templates import fopt_broken_power_law  # noqa: F401
 from gwb_templates.FOPT_templates import fopt_broken_power_law_old  # noqa: F401
-from gwb_templates.FOPT_templates import fopt_old_model  # noqa: F401
 from gwb_templates.FOPT_templates import pt_collision  # noqa: F401
 from gwb_templates.FOPT_templates import pt_plasma  # noqa: F401
 from gwb_templates.FOPT_templates import pt_sound_waves  # noqa: F401
