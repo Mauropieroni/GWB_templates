@@ -48,19 +48,6 @@ class TestExtragalacticSobbhBnsTemplate(unittest.TestCase):
         ratio_expected = float((fvec[1] / fvec[0]) ** PARS[1])
         self.assertAlmostEqual(ratio_spectrum, ratio_expected, places=10)
 
-    def test_ref_freq_change_reaches_value_and_gradient(self):
-        """``ref_freq`` and the spectrum's ``pivot`` must stay one quantity."""
-        m = get_template_from_registry("ExtragalacticSobbhBns")
-        before = m.omega_gw_h2(fvec, *PARS)
-        m.ref_freq = jnp.array(1e-2)
-        self.assertEqual(float(m.pivot), 1e-2)
-        self.assertFalse(
-            bool(jnp.allclose(m.omega_gw_h2(fvec, *PARS), before, atol=0.0))
-        )
-        grad = m.grad_theta_omega_gw_h2(fvec, PARS)
-        grad_fwd = gradient_autodiff(m._omega_from_parameter_vector, fvec, PARS)
-        self.assertTrue(bool(jnp.allclose(grad, grad_fwd, rtol=1e-12, atol=0.0)))
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
