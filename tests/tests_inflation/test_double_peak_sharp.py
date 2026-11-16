@@ -49,13 +49,25 @@ class TestDoublePeakSharpTemplate(unittest.TestCase):
         self.assertEqual(grad.shape, (N_FREQ, len(PARS_LOG)))
 
     def test_gradient_vs_jacfwd_log(self):
-        grad = model_log.grad_theta_omega_gw_h2(fvec, PARS_LOG)
+        # PARS_LOG uses log_amplitude=-10.0, which scales the whole spectrum (and
+        # its gradient) down by ~1e-10 and hides the sharp-feature term's real
+        # floating-point floor. Override just log_amplitude to 0.0 here (order-1
+        # envelope) so the comparison actually probes the unmasked regime; the
+        # module-level PARS_LOG is left untouched for the other tests.
+        pars_unmasked = PARS_LOG.at[0].set(0.0)
+        grad = model_log.grad_theta_omega_gw_h2(fvec, pars_unmasked)
         grad_fwd = gradient_autodiff(
             model_log._omega_from_parameter_vector,
             fvec,
-            PARS_LOG,
+            pars_unmasked,
         )
-        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=15)
+        # places=15 is unreachable here: the cos/sin argument
+        # omega_sharp_Hz * frequency reaches ~500 rad at these params (10**3
+        # Hz^-1 * f_max), so float64's ~2e-16 relative precision already limits
+        # the argument itself to ~500 * 2e-16 ~ 1e-13 absolute — an irreducible
+        # floating-point floor (measured ~1.6e-13 here), not an error in either
+        # gradient.
+        self.assertAlmostEqual(jnp.sum(jnp.abs(grad - grad_fwd)).item(), 0.0, places=10)
 
     def test_lin_log_agree(self):
         """

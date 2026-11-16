@@ -1,9 +1,8 @@
 r"""
 Broken power-law with direct smoothness parameter ``a_1`` (5 parameters).
 
-Used as the base spectral template for bubble-collision GW spectra. The
-smoothness ``a_1`` is a direct (non-log) parameter for transparent
-physical interpretation:
+Used as the base spectral template for bubble-collision GW spectra. The smoothness
+``a_1`` is a direct (non-log) parameter for transparent physical interpretation:
 
 .. math::
 
@@ -11,7 +10,12 @@ physical interpretation:
         x^{n_1}\,
         \left(\tfrac{1}{2} + \tfrac{1}{2} x^{a_1}\right)^{(n_2 - n_1)/a_1}
 
-with :math:`x = f / f_b` and :math:`\Omega_{\mathrm{GW}} h^2(f_b) = \Omega_b h^2`.
+with :math:`x = f / f_b` and :math:`\Omega_{\mathrm{GW}} h^2(f_b) = \Omega_b h^2`. This
+is exactly :class:`~gwb_templates.generic_templates.broken_power_law.BrokenPowerLaw`
+with ``a_1 = 1/delta`` (equivalently ``log_transition = -log10(a_1)``) and
+``log_pivot, tilt_1, tilt_2`` renamed to ``log_f_b, n_1, n_2`` — a direct-smoothness
+reparametrisation of the same shape, so this class holds a :class:`BrokenPowerLaw`
+instance and delegates to it instead of re-deriving the closed form.
 
 Reference: arXiv:2403.03723.
 """
@@ -19,15 +23,13 @@ Reference: arXiv:2403.03723.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
-import jax.typing as jtp
 
+from gwb_templates.generic_templates.broken_power_law import BrokenPowerLaw
 from gwb_templates.template import AnalyticTemplate
-
-ArrayLike: TypeAlias = jtp.ArrayLike
 
 
 class BrokenPowerLawA1(AnalyticTemplate):
@@ -47,6 +49,31 @@ class BrokenPowerLawA1(AnalyticTemplate):
     a_1
         Transition smoothness.
     """
+
+    DEFAULT_MODEL_NAME: ClassVar[str] = "broken_power_law_a1"
+    DEFAULT_MODEL_LABEL: ClassVar[str] = "Broken Power Law (a1)"
+    DEFAULT_PARAMETER_LABELS: ClassVar[Mapping[str, str]] = {
+        "log_amplitude": r"$\log_{10}(h^2\,\Omega_b)$",
+        "log_f_b": r"$\log_{10}(f_b/\mathrm{Hz})$",
+        "n_1": r"$n_1$",
+        "n_2": r"$n_2$",
+        "a_1": r"$a_1$",
+    }
+    DEFAULT_PRIOR_BY_PARAM: ClassVar[Mapping[str, Any]] = {
+        "log_amplitude": {
+            "prior_type": "uniform",
+            "minimum": -20.0,
+            "maximum": -1.0,
+        },
+        "log_f_b": {
+            "prior_type": "uniform",
+            "minimum": -10.0,
+            "maximum": 0.0,
+        },
+        "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
+        "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
+    }
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -70,69 +97,27 @@ class BrokenPowerLawA1(AnalyticTemplate):
 """,
     )
 
-    def __init__(
-        self,
-        *,
-        model_name: str | None = None,
-        model_label: str | None = None,
-        parameter_labels: Mapping[str, str] | None = None,
-        prior_by_param: Mapping[str, Any] | None = None,
-    ) -> None:
-        default_labels = {
-            "log_amplitude": r"$\log_{10}(h^2\,\Omega_b)$",
-            "log_f_b": r"$\log_{10}(f_b/\mathrm{Hz})$",
-            "n_1": r"$n_1$",
-            "n_2": r"$n_2$",
-            "a_1": r"$a_1$",
-        }
-        default_priors = {
-            "log_amplitude": {
-                "prior_type": "uniform",
-                "minimum": -20.0,
-                "maximum": -1.0,
-            },
-            "log_f_b": {
-                "prior_type": "uniform",
-                "minimum": -10.0,
-                "maximum": 0.0,
-            },
-            "n_1": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "n_2": {"prior_type": "uniform", "minimum": -7.0, "maximum": 7.0},
-            "a_1": {"prior_type": "uniform", "minimum": 0.1, "maximum": 10.0},
-        }
-
-        super().__init__(
-            model_name=model_name,
-            model_label=(
-                model_label
-                if model_label is not None
-                else "Broken Power Law (a1)"
-            ),
-            parameter_labels=(
-                parameter_labels if parameter_labels is not None else default_labels
-            ),
-            prior_by_param=(
-                prior_by_param if prior_by_param is not None else default_priors
-            ),
-        )
+    def __init__(self, **kwargs: Any) -> None:
+        # Shape delegate; the direct-smoothness parametrisation of this class maps
+        # onto BrokenPowerLaw's log-smoothness ``log_transition`` via ``a_1 = 1/delta``.
+        self._bpl = BrokenPowerLaw()
+        super().__init__(**kwargs)
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_amplitude: ArrayLike,
-        log_f_b: ArrayLike,
-        n_1: ArrayLike,
-        n_2: ArrayLike,
-        a_1: ArrayLike,
+        frequency: jax.Array,
+        log_amplitude: jax.Array,
+        log_f_b: jax.Array,
+        n_1: jax.Array,
+        n_2: jax.Array,
+        a_1: jax.Array,
     ) -> jax.Array:
         r"""
         Evaluate the ``a_1``-parametrised broken power law at ``frequency``.
         """
-        x = frequency / 10.0**log_f_b
-        return (
-            10.0**log_amplitude
-            * x**n_1
-            * (0.5 + 0.5 * x**a_1) ** ((n_2 - n_1) / a_1)
+        log_transition = -jnp.log10(a_1)
+        return self._bpl.omega_gw_h2(
+            frequency, log_amplitude, log_f_b, n_1, n_2, log_transition
         )
 
     def _grad_theta_omega_gw_h2_analytical(
@@ -141,28 +126,14 @@ class BrokenPowerLawA1(AnalyticTemplate):
         theta: jax.Array,
     ) -> jax.Array:
         r"""
-        Analytic Jacobian of the ``a_1``-parametrised broken power law.
-
-        Closed-form derivatives w.r.t. ``(log_amplitude, log_f_b, n_1,
-        n_2, a_1)``; see module docstring for the spectral shape.
+        Analytic Jacobian of the ``a_1``-parametrised broken power law, via the chain
+        rule through :class:`BrokenPowerLaw`'s own Jacobian (``a_1 = 1/delta``, so only
+        the ``a_1`` column needs rescaling — the rest pass straight through unchanged).
         """
         log_amplitude, log_f_b, n_1, n_2, a_1 = theta
-        x = frequency / 10.0**log_f_b
-        xa = x**a_1
-        ln10 = jnp.log(10.0)
-        log_half_1_xa = jnp.log(0.5 * (1.0 + xa))
-        model = self.omega_gw_h2(frequency, log_amplitude, log_f_b, n_1, n_2, a_1)
-
-        d_logA = model * ln10
-        d_logfb = model * ln10 * (-n_1 - n_2 * xa) / (1.0 + xa)
-        d_n1 = model * (jnp.log(x) - log_half_1_xa / a_1)
-        d_n2 = model * log_half_1_xa / a_1
-        d_a1 = (
-            model
-            * (n_2 - n_1)
-            / a_1**2
-            / (1.0 + xa)
-            * (a_1 * xa * jnp.log(x) - (1.0 + xa) * log_half_1_xa)
-        )
-
-        return jnp.stack([d_logA, d_logfb, d_n1, d_n2, d_a1], axis=-1)
+        log_transition = -jnp.log10(a_1)
+        theta_bpl = jnp.stack([log_amplitude, log_f_b, n_1, n_2, log_transition])
+        # Columns of J: [d_logA, d_logfb, d_n1, d_n2, d_logtransition].
+        J = self._bpl._grad_theta_omega_gw_h2_analytical(frequency, theta_bpl)
+        d_a1 = J[..., 4] * (-1.0 / (a_1 * jnp.log(10.0)))
+        return jnp.concatenate([J[..., :4], d_a1[..., None]], axis=-1)

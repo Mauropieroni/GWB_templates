@@ -4,8 +4,12 @@ Cosmic String Model II with and without gravitational self-interaction effects
 
 Uses a precomputed 2D data grid over (log_Gmu, log10_frequency) and evaluates
 h^2 * Omega_GW via JAX bilinear interpolation so that JAX automatic differentiation
-works. See :mod:`abelian_higgs_model_ii` for the amplitude-scaled variant built on
-this module's grid and interpolation primitives.
+works. :class:`CosmicStringModelIII` subclasses :class:`CosmicStringModelII`
+directly, reusing its grid loader, ``setup()``, ``omega_gw_h2``, and analytical
+gradient rather than re-implementing them; :mod:`abelian_higgs_model_ii`'s
+``AbelianHiggsModelII`` instead holds a composed :class:`CosmicStringModelII`
+instance (its two free parameters make a same-shape override impossible), reusing
+its grid loader and ``setup()`` the same way.
 
 Reference: arXiv:1309.6637 (Blanco-Pillado, Olum & Shlaer — original BOS
            loop-number-density distribution);
@@ -22,7 +26,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import jax
 import jax.numpy as jnp
@@ -32,8 +36,6 @@ from gwb_templates.template import NumericalTemplate, DifferentiationBackend
 from gwb_templates.utils import bilinear_dS_dix as _bilinear_dS_dix
 from gwb_templates.utils import bilinear_eval as _bilinear_eval
 from gwb_templates.utils import to_frac_ix as _to_frac_ix
-
-ArrayLike: TypeAlias = float | int | np.ndarray | jax.Array
 
 # with backreaction; should be used by default
 _DEFAULT_DATA_FILENAME = "Model-II-GBR_WOB-loggrid.dat"
@@ -92,6 +94,11 @@ class CosmicStringModelII(NumericalTemplate):
 
     jittable: ClassVar[bool] = True
     differentiation_backend: ClassVar[DifferentiationBackend] = "autodiff"
+
+    #: Public alias for the module's default grid filename, so sibling modules
+    #: (e.g. :mod:`abelian_higgs_model_ii`) can reuse it without importing a
+    #: private, underscore-prefixed name across module boundaries.
+    DEFAULT_DATA_FILENAME: ClassVar[str] = _DEFAULT_DATA_FILENAME
 
     bibtex_entries: ClassVar[tuple[str, ...]] = (
         r"""
@@ -210,8 +217,8 @@ class CosmicStringModelII(NumericalTemplate):
 
     def omega_gw_h2(
         self,
-        frequency: ArrayLike,
-        log_Gmu: ArrayLike,
+        frequency: jax.Array,
+        log_Gmu: jax.Array,
     ) -> jax.Array:
         r"""Evaluate :math:`\Omega_{\mathrm{GW}} h^2(f)` for Model II."""
         log10_f = jnp.log10(frequency)
@@ -221,7 +228,7 @@ class CosmicStringModelII(NumericalTemplate):
 
     def _grad_theta_omega_gw_h2_analytical(
         self,
-        frequency: ArrayLike,
+        frequency: jax.Array,
         theta: jax.Array,
     ) -> jax.Array:
         r"""Analytical :math:`\partial(\Omega_{\mathrm{GW}} h^2)/\partial\theta`."""

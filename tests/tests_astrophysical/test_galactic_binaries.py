@@ -11,8 +11,8 @@ fvec = jnp.geomspace(c.f_min, c.f_max, N_FREQ)
 
 # New registry API
 model = get_template_from_registry("GalacticBinaries")
-# log_galactic, alpha, log_fr1, log_frk, log_fr2
-PARS = jnp.array([-10.0, 3.0, -3.5, -3.0, -4.0])
+# log_amplitude, tilt, alpha, log_fr1, log_frk, log_fr2
+PARS = jnp.array([-10.0, 2.0 / 3.0, 3.0, -3.5, -3.0, -4.0])
 
 
 class TestGalacticBinariesTemplate(unittest.TestCase):
